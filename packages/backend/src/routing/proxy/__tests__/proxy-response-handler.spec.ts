@@ -1,0 +1,2373 @@
+import {
+  buildMetaHeaders,
+  handleProviderError,
+  recordFallbackFailures,
+  handleStreamResponse,
+  handleNonStreamResponse,
+  recordSuccess,
+} from '../proxy-response-handler';
+import { RoutingMeta } from '../proxy.service';
+import { FailedFallback } from '../proxy-fallback.service';
+import { IngestionContext } from '../../../otlp/interfaces/ingestion-context.interface';
+import { StreamUsage } from '../stream-writer';
+
+const testCtx: IngestionContext = {
+  tenantId: 'tenant-1',
+  agentId: 'agent-1',
+  agentName: 'test-agent',
+  userId: 'user-1',
+};
+
+function makeMeta(overrides: Partial<RoutingMeta> = {}): RoutingMeta {
+  return {
+    tier: 'standard' as any,
+    model: 'gpt-4o',
+    provider: 'openai',
+    confidence: 0.9,
+    reason: 'auto',
+    ...overrides,
+  };
+}
+
+function mockResponse(): {
+  res: Record<string, jest.Mock> & { writableEnded?: boolean };
+  headers: Record<string, string>;
+} {
+  const headers: Record<string, string> = {};
+  const res: Record<string, jest.Mock> & { writableEnded?: boolean } = {
+    status: jest.fn().mockReturnThis(),
+    setHeader: jest.fn((k: string, v: string) => {
+      headers[k] = v;
+    }),
+    json: jest.fn(),
+    write: jest.fn(),
+    end: jest.fn(),
+  };
+  res.writableEnded = false;
+  return { res, headers };
+}
+
+function mockRecorder() {
+  return {
+    recordProviderError: jest.fn().mockResolvedValue(undefined),
+    recordFailedFallbacks: jest.fn().mockResolvedValue(undefined),
+    recordPrimaryFailure: jest.fn().mockResolvedValue(undefined),
+    recordFallbackSuccess: jest.fn().mockResolvedValue(undefined),
+    recordSuccessMessage: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+describe('proxy-response-handler', () => {
+  /* ── buildMetaHeaders ── */
+
+  describe('buildMetaHeaders', () => {
+    it('should include standard routing headers', () => {
+      const meta = makeMeta();
+      const headers = buildMetaHeaders(meta);
+
+      expect(headers['X-Hyper-Tern-Tier']).toBe('standard');
+      expect(headers['X-Hyper-Tern-Model']).toBe('gpt-4o');
+      expect(headers['X-Hyper-Tern-Provider']).toBe('openai');
+      expect(headers['X-Hyper-Tern-Confidence']).toBe('0.9');
+      expect(headers['X-Hyper-Tern-Reason']).toBe('auto');
+    });
+
+    it('should include fallback headers when fallbackFromModel is set', () => {
+      const meta = makeMeta({
+        fallbackFromModel: 'gpt-4o',
+        fallbackIndex: 2,
+      });
+      const headers = buildMetaHeaders(meta);
+
+      expect(headers['X-Hyper-Tern-Fallback-From']).toBe('gpt-4o');
+      expect(headers['X-Hyper-Tern-Fallback-Index']).toBe('2');
+    });
+
+    it('should default fallback index to 0 when not set', () => {
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o' });
+      const headers = buildMetaHeaders(meta);
+
+      expect(headers['X-Hyper-Tern-Fallback-Index']).toBe('0');
+    });
+
+    it('should not include fallback headers when no fallback', () => {
+      const meta = makeMeta();
+      const headers = buildMetaHeaders(meta);
+
+      expect(headers).not.toHaveProperty('X-Hyper-Tern-Fallback-From');
+      expect(headers).not.toHaveProperty('X-Hyper-Tern-Fallback-Index');
+    });
+
+    it('should include specificity header when specificity_category is set', () => {
+      const meta = makeMeta({ specificity_category: 'coding' });
+      const headers = buildMetaHeaders(meta);
+
+      expect(headers['X-Hyper-Tern-Specificity']).toBe('coding');
+    });
+
+    it('should not include specificity header when specificity_category is not set', () => {
+      const meta = makeMeta();
+      const headers = buildMetaHeaders(meta);
+
+      expect(headers).not.toHaveProperty('X-Hyper-Tern-Specificity');
+    });
+  });
+
+  /* ── handleProviderError ── */
+
+  describe('handleProviderError', () => {
+    it('should record provider error and return sanitized error for non-fallback', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const metaHeaders = buildMetaHeaders(meta);
+
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        metaHeaders,
+        500,
+        'Internal Server Error',
+        undefined,
+        recorder as any,
+        'trace-1',
+      );
+
+      expect(recorder.recordProviderError).toHaveBeenCalledWith(
+        testCtx,
+        500,
+        'Internal Server Error',
+        {
+          model: 'gpt-4o',
+          provider: 'openai',
+          tier: 'standard',
+          traceId: 'trace-1',
+          fallbackFromModel: undefined,
+          fallbackIndex: undefined,
+          authType: undefined,
+          reason: 'auto',
+          specificityCategory: undefined,
+        },
+      );
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({ type: 'upstream_error', status: 500 }),
+        }),
+      );
+    });
+
+    it('forwards meta.reason so single-shot upstream errors keep routing_reason', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta({ reason: 'header-match' });
+      const metaHeaders = buildMetaHeaders(meta);
+
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        metaHeaders,
+        500,
+        'oops',
+        undefined,
+        recorder as any,
+      );
+
+      expect(recorder.recordProviderError).toHaveBeenCalledWith(
+        testCtx,
+        500,
+        'oops',
+        expect.objectContaining({ reason: 'header-match' }),
+      );
+    });
+
+    it('should handle fallback exhausted when failedFallbacks present and no fallbackFromModel', async () => {
+      const { res, headers } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta(); // no fallbackFromModel
+      const metaHeaders = buildMetaHeaders(meta);
+      const failedFallbacks: FailedFallback[] = [
+        {
+          model: 'claude-3-haiku',
+          provider: 'anthropic',
+          fallbackIndex: 0,
+          status: 429,
+          errorBody: 'rate limited',
+        },
+      ];
+
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        metaHeaders,
+        502,
+        'Bad Gateway',
+        failedFallbacks,
+        recorder as any,
+      );
+
+      expect(recorder.recordFailedFallbacks).toHaveBeenCalled();
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith('X-Hyper-Tern-Fallback-Exhausted', 'true');
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            type: 'fallback_exhausted',
+            primary_model: 'gpt-4o',
+            attempted_fallbacks: [{ model: 'claude-3-haiku', provider: 'anthropic', status: 429 }],
+          }),
+        }),
+      );
+    });
+
+    it('should record simple error when failedFallbacks present but meta has fallbackFromModel', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o' });
+      const metaHeaders = buildMetaHeaders(meta);
+      const failedFallbacks: FailedFallback[] = [
+        {
+          model: 'claude-3-haiku',
+          provider: 'anthropic',
+          fallbackIndex: 0,
+          status: 429,
+          errorBody: '',
+        },
+      ];
+
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        metaHeaders,
+        500,
+        'Error',
+        failedFallbacks,
+        recorder as any,
+      );
+
+      // Should NOT enter fallback-exhausted path since fallbackFromModel is set
+      expect(recorder.recordProviderError).toHaveBeenCalled();
+      expect(recorder.recordFailedFallbacks).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty failedFallbacks array as non-fallback error', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const metaHeaders = buildMetaHeaders(meta);
+
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        metaHeaders,
+        404,
+        'Not Found',
+        [],
+        recorder as any,
+      );
+
+      expect(recorder.recordProviderError).toHaveBeenCalled();
+      expect(recorder.recordFailedFallbacks).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when recordProviderError rejects', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      recorder.recordProviderError.mockRejectedValue(new Error('DB error'));
+      const meta = makeMeta();
+
+      // Should not throw -- fire-and-forget with .catch
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        buildMetaHeaders(meta),
+        500,
+        'Error',
+        undefined,
+        recorder as any,
+      );
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('should surface actual error message in development mode', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      try {
+        const { res } = mockResponse();
+        const recorder = mockRecorder();
+        const meta = makeMeta();
+        const metaHeaders = buildMetaHeaders(meta);
+
+        await handleProviderError(
+          res as any,
+          testCtx,
+          meta,
+          metaHeaders,
+          400,
+          JSON.stringify({ error: { message: 'Invalid model' } }),
+          undefined,
+          recorder as any,
+        );
+
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({ message: 'Invalid model' }),
+          }),
+        );
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.NODE_ENV;
+        } else {
+          process.env.NODE_ENV = originalEnv;
+        }
+      }
+    });
+  });
+
+  /* ── recordFallbackFailures ── */
+
+  describe('recordFallbackFailures', () => {
+    it('should return undefined when no fallbackFromModel', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+
+      const result = recordFallbackFailures(testCtx, meta, undefined, recorder as any);
+
+      expect(result).toBeUndefined();
+      expect(recorder.recordPrimaryFailure).not.toHaveBeenCalled();
+    });
+
+    it('should record primary failure and return timestamp', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({
+        fallbackFromModel: 'gpt-4o',
+        primaryErrorBody: 'rate limited',
+        primaryErrorStatus: 429,
+      });
+
+      const result = recordFallbackFailures(testCtx, meta, undefined, recorder as any);
+
+      expect(result).toBeDefined();
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalled();
+    });
+
+    it('should record failed fallbacks when present', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o' });
+      const failedFallbacks: FailedFallback[] = [
+        { model: 'claude', provider: 'anthropic', fallbackIndex: 0, status: 500, errorBody: '' },
+      ];
+
+      recordFallbackFailures(testCtx, meta, failedFallbacks, recorder as any);
+
+      expect(recorder.recordFailedFallbacks).toHaveBeenCalled();
+    });
+
+    it('should not record failed fallbacks when array is empty', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o' });
+
+      recordFallbackFailures(testCtx, meta, [], recorder as any);
+
+      expect(recorder.recordFailedFallbacks).not.toHaveBeenCalled();
+    });
+
+    it('should use default error message when primaryErrorBody is not set', () => {
+      const recorder = mockRecorder();
+      // The meta fixture represents a fallback-success flow:
+      //   meta.provider  = 'openai'     ← fallback that succeeded
+      //   meta.primaryProvider = 'anthropic' ← primary that failed
+      // recordPrimaryFailure must attribute the primary row to the primary
+      // provider, not the fallback's provider.
+      const meta = makeMeta({
+        fallbackFromModel: 'claude-sonnet-4',
+        primaryErrorStatus: 503,
+        primaryProvider: 'anthropic',
+      });
+
+      recordFallbackFailures(testCtx, meta, undefined, recorder as any);
+
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalledWith(
+        testCtx,
+        expect.anything(),
+        'claude-sonnet-4',
+        'Provider returned HTTP 503',
+        expect.any(String),
+        undefined,
+        { provider: 'anthropic', reason: 'auto', callerAttribution: undefined },
+      );
+    });
+
+    it('should use default 500 status when primaryErrorStatus is not set', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({
+        fallbackFromModel: 'claude-sonnet-4',
+        primaryProvider: 'anthropic',
+      });
+
+      recordFallbackFailures(testCtx, meta, undefined, recorder as any);
+
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalledWith(
+        testCtx,
+        expect.anything(),
+        'claude-sonnet-4',
+        'Provider returned HTTP 500',
+        expect.any(String),
+        undefined,
+        { provider: 'anthropic', reason: 'auto', callerAttribution: undefined },
+      );
+    });
+
+    it('passes meta.primaryAuthType (not meta.auth_type) to recordPrimaryFailure (#1173)', () => {
+      // In a fallback-success flow, meta.auth_type holds the FALLBACK's auth
+      // (used to cost the success row). The primary failure row must instead
+      // carry the PRIMARY's auth_type, which lives on meta.primaryAuthType.
+      const recorder = mockRecorder();
+      const meta = makeMeta({
+        fallbackFromModel: 'claude-sonnet-4',
+        primaryProvider: 'anthropic',
+        auth_type: 'subscription',
+        primaryAuthType: 'api_key',
+      });
+
+      recordFallbackFailures(testCtx, meta, undefined, recorder as any);
+
+      const call = recorder.recordPrimaryFailure.mock.calls[0];
+      // 6th positional arg is `authType` on recordPrimaryFailure.
+      expect(call[5]).toBe('api_key');
+    });
+
+    it('leaves primary provider undefined when meta.primaryProvider is not set', () => {
+      // Guard against regression: without primaryProvider we must NOT fall
+      // back to meta.provider (which is the fallback's provider in this flow).
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'claude-sonnet-4' });
+
+      recordFallbackFailures(testCtx, meta, undefined, recorder as any);
+
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalledWith(
+        testCtx,
+        expect.anything(),
+        'claude-sonnet-4',
+        expect.any(String),
+        expect.any(String),
+        undefined,
+        { provider: undefined, reason: 'auto', callerAttribution: undefined },
+      );
+    });
+  });
+
+  /* ── handleStreamResponse ── */
+
+  describe('handleStreamResponse', () => {
+    function mockForward(
+      flags: {
+        isGoogle?: boolean;
+        isAnthropic?: boolean;
+        isChatGpt?: boolean;
+        isResponses?: boolean;
+      } = {},
+    ) {
+      return {
+        response: { body: { getReader: jest.fn() }, headers: new Headers() },
+        isGoogle: flags.isGoogle ?? false,
+        isAnthropic: flags.isAnthropic ?? false,
+        isChatGpt: flags.isChatGpt ?? false,
+        isResponses: flags.isResponses ?? false,
+      };
+    }
+
+    function mockProviderClient() {
+      return {
+        convertGoogleStreamChunk: jest.fn(),
+        createAnthropicStreamTransformer: jest.fn().mockReturnValue(jest.fn()),
+        createReasoningContentStreamTransformer: jest.fn().mockReturnValue(jest.fn()),
+        convertChatGptStreamChunk: jest.fn(),
+      };
+    }
+
+    // These tests verify the branching logic (which adapter is used).
+    // Full streaming is tested in stream-writer.spec.ts.
+    // We mock pipeStream + pipePassthrough to avoid needing real ReadableStreams.
+    let pipeStreamSpy: jest.SpyInstance;
+    let pipePassthroughSpy: jest.SpyInstance;
+    let initSseHeadersSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      // We need to spy on the imported functions
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const streamWriter = require('../stream-writer');
+      pipeStreamSpy = jest.spyOn(streamWriter, 'pipeStream').mockResolvedValue(null);
+      pipePassthroughSpy = jest.spyOn(streamWriter, 'pipePassthrough').mockResolvedValue(null);
+      initSseHeadersSpy = jest.spyOn(streamWriter, 'initSseHeaders').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      pipeStreamSpy?.mockRestore();
+      pipePassthroughSpy?.mockRestore();
+      initSseHeadersSpy?.mockRestore();
+    });
+
+    it('should use Google adapter for Google responses', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isGoogle: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        expect.any(Function),
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should use Anthropic adapter for Anthropic responses', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isAnthropic: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      // `undefined` is the thinking-blocks callback — absent when no
+      // thinking cache is provided to the handler (OpenAI-compat contract
+      // tests don't wire one up).
+      expect(client.createAnthropicStreamTransformer).toHaveBeenCalledWith('gpt-4o', undefined);
+    });
+
+    it('should forward extracted thinking blocks into the thinking cache on Anthropic streams', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isAnthropic: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+      const thinkingCache = { store: jest.fn() };
+      const sessionKey = 'sess-anthro-stream';
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        sessionKey,
+        thinkingCache as any,
+      );
+
+      // Second arg to createAnthropicStreamTransformer is the onThinkingBlocks
+      // callback. Grab it and invoke it to prove the handler wires it to
+      // thinkingCache.store.
+      const callback = client.createAnthropicStreamTransformer.mock.calls[0][1];
+      expect(typeof callback).toBe('function');
+      const blocks = [{ type: 'thinking', thinking: 'r', signature: 's' }];
+      callback('toolu_stream', blocks);
+      expect(thinkingCache.store).toHaveBeenCalledWith(
+        'sess-anthro-stream',
+        'toolu_stream',
+        blocks,
+      );
+    });
+
+    it('apiMode=messages + Anthropic upstream dispatches to pipePassthrough with the Anthropic transformer as tap (issue #1886)', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isAnthropic: true });
+      const tap = jest.fn();
+      const client = mockProviderClient();
+      client.createAnthropicStreamTransformer.mockReturnValue(tap);
+      const meta = makeMeta();
+
+      const usage = await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+      );
+
+      // Dispatched to pipePassthrough, not pipeStream. Tap is the Anthropic
+      // stream transformer so thinking-block extraction + OpenAI-shape
+      // usage parsing still happen as a side effect.
+      expect(pipePassthroughSpy).toHaveBeenCalledWith(forward.response.body, res, tap, undefined);
+      expect(pipeStreamSpy).not.toHaveBeenCalled();
+      expect(usage).toBeNull();
+    });
+
+    it('apiMode=messages + Anthropic upstream forwards raw stream chunks to capture', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isAnthropic: true });
+      const tap = jest.fn();
+      const client = mockProviderClient();
+      client.createAnthropicStreamTransformer.mockReturnValue(tap);
+      const capture = {
+        setHeaders: jest.fn(),
+        appendRaw: jest.fn(),
+      };
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        makeMeta(),
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+        capture as any,
+      );
+
+      expect(pipePassthroughSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        tap,
+        expect.any(Function),
+      );
+      const onClientChunk = pipePassthroughSpy.mock.calls[0][3];
+      onClientChunk('event: message_start\n\n');
+      expect(capture.appendRaw).toHaveBeenCalledWith('event: message_start\n\n');
+    });
+
+    it('apiMode=messages + Anthropic upstream returns the usage that pipePassthrough captured', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isAnthropic: true });
+      const client = mockProviderClient();
+      client.createAnthropicStreamTransformer.mockReturnValue(jest.fn());
+      const meta = makeMeta();
+      pipePassthroughSpy.mockResolvedValue({
+        prompt_tokens: 58,
+        completion_tokens: 12,
+        cache_read_tokens: 5,
+        cache_creation_tokens: 3,
+      });
+
+      const usage = await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+      );
+
+      expect(usage).toEqual({
+        prompt_tokens: 58,
+        completion_tokens: 12,
+        cache_read_tokens: 5,
+        cache_creation_tokens: 3,
+      });
+    });
+
+    it('should use ChatGPT adapter for ChatGPT responses', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isChatGpt: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        expect.any(Function),
+        undefined,
+        undefined,
+      );
+    });
+
+    it('ChatGPT stream transformer delegates each chunk to convertChatGptStreamChunk', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isChatGpt: true });
+      const client = mockProviderClient();
+      client.convertChatGptStreamChunk.mockReturnValue('data: out\n\n');
+      const meta = makeMeta();
+
+      let captured: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_b: unknown, _r: unknown, transform?: (c: string) => string | null) => {
+          captured = transform;
+          return null;
+        },
+      );
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(captured).toBeDefined();
+      const out = captured!('data: in\n\n');
+      expect(out).toBe('data: out\n\n');
+      expect(client.convertChatGptStreamChunk).toHaveBeenCalledWith('data: in\n\n', 'gpt-4o');
+    });
+
+    it('should pipe without transformer for standard OpenAI responses', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward();
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('normalizes Copilot OpenAI-compatible reasoning streams through the reasoning transformer', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward();
+      const client = mockProviderClient();
+      const meta = makeMeta({ provider: 'copilot', model: 'copilot/claude-sonnet-4.6' });
+      const transformer = jest.fn((chunk: string) => `data: ${chunk}\n\n`);
+      client.createReasoningContentStreamTransformer.mockReturnValue(transformer);
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(client.createReasoningContentStreamTransformer).toHaveBeenCalledWith(undefined, {
+        outputStreamDeltaPaths: ['reasoning_content', 'reasoning_text'],
+        clientStreamDeltaPath: 'reasoning_content',
+      });
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        expect.any(Function),
+        undefined,
+        undefined,
+      );
+    });
+
+    it('passes a finalize callback to pipeStream when apiMode=messages (default OpenAI provider)', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward();
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+      );
+
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        expect.any(Function),
+        expect.any(Function),
+        undefined,
+      );
+    });
+
+    it('wraps the ChatGPT stream chunk converter through the messages transformer', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isChatGpt: true });
+      const client = mockProviderClient();
+      client.convertChatGptStreamChunk.mockReturnValue(
+        'data: {"choices":[{"delta":{"content":"x"}}]}\n\n',
+      );
+      const meta = makeMeta();
+
+      let captured: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_b: unknown, _r: unknown, transform?: (c: string) => string | null) => {
+          captured = transform;
+          return null;
+        },
+      );
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+      );
+
+      expect(captured).toBeDefined();
+      const out = captured!('data: ignored\n\n');
+      expect(out).toContain('event: message_start');
+      expect(out).toContain('event: content_block_delta');
+    });
+
+    it('returns null when the ChatGPT-converted chunk is empty under apiMode=messages', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isChatGpt: true });
+      const client = mockProviderClient();
+      client.convertChatGptStreamChunk.mockReturnValue(null);
+      const meta = makeMeta();
+
+      let captured: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_b: unknown, _r: unknown, transform?: (c: string) => string | null) => {
+          captured = transform;
+          return null;
+        },
+      );
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+      );
+
+      expect(captured!('chunk')).toBeNull();
+    });
+
+    it('should pass through native Responses streams without a transformer', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isResponses: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'responses',
+      );
+
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should convert chat completion streams into the full Responses lifecycle (issue #2064)', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward();
+      const client = mockProviderClient();
+      const meta = makeMeta();
+      let capturedTransform: ((chunk: string) => string | null) | undefined;
+      let capturedFinalize: (() => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (
+          _body: unknown,
+          _res: unknown,
+          transform?: (chunk: string) => string | null,
+          finalize?: () => string | null,
+        ) => {
+          capturedTransform = transform;
+          capturedFinalize = finalize;
+          return null;
+        },
+      );
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'responses',
+      );
+
+      // The converter must be stateful: the message item + content part are
+      // opened ahead of the first delta so strict clients keep the text.
+      expect(capturedTransform).toBeDefined();
+      const opened = capturedTransform!(
+        'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n',
+      )!;
+      expect(opened).toContain('event: response.output_item.added');
+      expect(opened).toContain('event: response.content_part.added');
+      expect(opened).toContain('event: response.output_text.delta');
+
+      // finalize must close the item and terminate the stream itself, since
+      // pipeStream skips its own [DONE] when a finalize is supplied.
+      expect(capturedFinalize).toBeDefined();
+      const tail = capturedFinalize!()!;
+      expect(tail).toContain('event: response.output_item.done');
+      expect(tail).toContain('event: response.completed');
+      expect(tail).toContain('"text":"Hi"');
+      expect(tail.trimEnd().endsWith('data: [DONE]')).toBe(true);
+    });
+
+    it('should cache thought_signatures from Google stream chunks', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isGoogle: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      const signatureCache = { store: jest.fn() };
+      const sessionKey = 'sess-123';
+
+      // The transformer is captured by pipeStream — we need to invoke it manually.
+      let capturedTransform: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_body: unknown, _res: unknown, transform?: (chunk: string) => string | null) => {
+          capturedTransform = transform;
+          return null;
+        },
+      );
+
+      // convertGoogleStreamChunk now returns structured { chunk, signatures }
+      // so the handler can cache signatures without scraping the output.
+      client.convertGoogleStreamChunk.mockReturnValue({
+        chunk: 'data: {}\n\n',
+        signatures: [
+          { toolCallId: 'call_abc', signature: 'sig_xyz' },
+          { toolCallId: 'call_def', signature: 'sig_uvw' },
+        ],
+      });
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        signatureCache as any,
+        sessionKey,
+      );
+
+      expect(capturedTransform).toBeDefined();
+      const out = capturedTransform!('{}');
+      expect(out).toBe('data: {}\n\n');
+
+      expect(signatureCache.store).toHaveBeenCalledTimes(2);
+      expect(signatureCache.store).toHaveBeenCalledWith('sess-123', 'call_abc', 'sig_xyz');
+      expect(signatureCache.store).toHaveBeenCalledWith('sess-123', 'call_def', 'sig_uvw');
+    });
+
+    it('should not cache when signatureCache is absent', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isGoogle: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      let capturedTransform: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_body: unknown, _res: unknown, transform?: (chunk: string) => string | null) => {
+          capturedTransform = transform;
+          return null;
+        },
+      );
+      client.convertGoogleStreamChunk.mockReturnValue({
+        chunk: 'data: {}\n\n',
+        signatures: [{ toolCallId: 'call_abc', signature: 'sig_xyz' }],
+      });
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      // Should not throw — just drops the signatures silently.
+      expect(() => capturedTransform!('{}')).not.toThrow();
+    });
+
+    it('caches reasoning_content from compatible OpenAI-compatible streams', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward();
+      const client = mockProviderClient();
+      const meta = makeMeta({ provider: 'deepseek', model: 'deepseek-chat' });
+      const reasoningCache = { store: jest.fn() };
+      const sessionKey = 'sess-reasoning-stream';
+      const transformer = jest.fn((chunk: string) => `data: ${chunk}\n\n`);
+      client.createReasoningContentStreamTransformer.mockReturnValue(transformer);
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        sessionKey,
+        undefined,
+        'chat_completions',
+        undefined,
+        reasoningCache as any,
+      );
+
+      const callback = client.createReasoningContentStreamTransformer.mock.calls[0][0];
+      expect(typeof callback).toBe('function');
+      callback('call_1', 'streamed reasoning');
+      expect(reasoningCache.store).toHaveBeenCalledWith(
+        'sess-reasoning-stream',
+        'call_1',
+        'streamed reasoning',
+      );
+      expect(pipeStreamSpy).toHaveBeenCalledWith(
+        forward.response.body,
+        res,
+        expect.any(Function),
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  /* ── handleNonStreamResponse ── */
+
+  describe('handleNonStreamResponse', () => {
+    function mockProviderClient() {
+      return {
+        convertGoogleResponse: jest.fn().mockReturnValue({ id: 'google-converted' }),
+        convertAnthropicResponse: jest.fn().mockReturnValue({ id: 'anthropic-converted' }),
+        convertChatGptResponse: jest.fn().mockReturnValue({ id: 'chatgpt-converted' }),
+        collectChatGptSseResponse: jest.fn().mockReturnValue({ id: 'chatgpt-collected' }),
+      };
+    }
+
+    function mockForward(
+      body: unknown,
+      flags: {
+        isGoogle?: boolean;
+        isAnthropic?: boolean;
+        isChatGpt?: boolean;
+        isResponses?: boolean;
+        contentType?: string;
+      } = {},
+    ) {
+      return {
+        response: {
+          json: jest.fn().mockResolvedValue(body),
+          text: jest.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
+          headers: {
+            get: jest.fn().mockReturnValue(flags.contentType ?? 'application/json'),
+          },
+        },
+        isGoogle: flags.isGoogle ?? false,
+        isAnthropic: flags.isAnthropic ?? false,
+        isChatGpt: flags.isChatGpt ?? false,
+        isResponses: flags.isResponses ?? false,
+      };
+    }
+
+    it('should convert Google response and extract usage', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      client.convertGoogleResponse.mockReturnValue({
+        usage: { prompt_tokens: 100, completion_tokens: 50 },
+      });
+      const forward = mockForward({}, { isGoogle: true });
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(client.convertGoogleResponse).toHaveBeenCalled();
+      expect(usage).toEqual({
+        prompt_tokens: 100,
+        completion_tokens: 50,
+        cache_read_tokens: undefined,
+        cache_creation_tokens: undefined,
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('apiMode=messages + Anthropic upstream returns the upstream body verbatim, preserving server-tool blocks (issue #1886)', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      // A real Anthropic Messages response with server-tool result blocks.
+      // The lossy OpenAI converter (convertAnthropicResponse) only knows
+      // text/thinking/tool_use; without passthrough, server_tool_use and
+      // web_search_tool_result are silently dropped on the way out.
+      const body = {
+        id: 'msg_01',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-sonnet-4-5-20250929',
+        content: [
+          {
+            type: 'server_tool_use',
+            id: 'srvtoolu_1',
+            name: 'web_search',
+            input: { query: 'cats' },
+          },
+          {
+            type: 'web_search_tool_result',
+            tool_use_id: 'srvtoolu_1',
+            content: [{ type: 'web_search_result', url: 'https://example.test', title: 'Cats' }],
+          },
+          { type: 'text', text: 'Found some cats.' },
+        ],
+        usage: { input_tokens: 50, output_tokens: 12, cache_read_input_tokens: 0 },
+      };
+      const forward = mockForward(body, { isAnthropic: true });
+      const meta = makeMeta();
+      const thinkingCache = { store: jest.fn() };
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        'sess-msg-anthro',
+        thinkingCache as any,
+        'messages',
+      );
+
+      // Lossy converter wasn't called at all.
+      expect(client.convertAnthropicResponse).not.toHaveBeenCalled();
+      // Client gets the upstream body untouched.
+      expect(res.json).toHaveBeenCalledWith(body);
+      // Anthropic-native usage was parsed via parseUsageObject.
+      expect(usage).toEqual({
+        prompt_tokens: 50,
+        completion_tokens: 12,
+        cache_read_tokens: undefined,
+        cache_creation_tokens: 0,
+      });
+      // No thinking blocks → no cache writes.
+      expect(thinkingCache.store).not.toHaveBeenCalled();
+    });
+
+    it('apiMode=messages + Anthropic upstream stores thinking blocks keyed by first tool_use id', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const body = {
+        content: [
+          { type: 'thinking', thinking: 'searching...', signature: 'sig' },
+          { type: 'tool_use', id: 'toolu_1', name: 'web_search', input: { q: 'x' } },
+        ],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      };
+      const forward = mockForward(body, { isAnthropic: true });
+      const meta = makeMeta();
+      const thinkingCache = { store: jest.fn() };
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        'sess-x',
+        thinkingCache as any,
+        'messages',
+      );
+
+      expect(thinkingCache.store).toHaveBeenCalledWith('sess-x', 'toolu_1', [
+        { type: 'thinking', thinking: 'searching...', signature: 'sig' },
+      ]);
+    });
+
+    it('should convert Anthropic response', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      client.convertAnthropicResponse.mockReturnValue({});
+      const forward = mockForward({}, { isAnthropic: true });
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(client.convertAnthropicResponse).toHaveBeenCalled();
+      expect(usage).toBeNull();
+    });
+
+    it('should cache extracted thinking blocks from Anthropic non-stream response', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const thinkingCache = { store: jest.fn() };
+      const sessionKey = 'sess-anthro';
+
+      client.convertAnthropicResponse.mockReturnValue({
+        id: 'anthropic-converted',
+        _extractedThinkingBlocks: {
+          firstToolUseId: 'toolu_01',
+          blocks: [{ type: 'thinking', thinking: 'reason', signature: 's' }],
+        },
+      });
+
+      const forward = mockForward({}, { isAnthropic: true });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        sessionKey,
+        thinkingCache as any,
+      );
+
+      expect(thinkingCache.store).toHaveBeenCalledTimes(1);
+      expect(thinkingCache.store).toHaveBeenCalledWith('sess-anthro', 'toolu_01', [
+        { type: 'thinking', thinking: 'reason', signature: 's' },
+      ]);
+
+      // The internal side-channel is stripped before the body reaches the client.
+      const sentBody = res.json.mock.calls[0][0];
+      expect(sentBody._extractedThinkingBlocks).toBeUndefined();
+    });
+
+    it('should strip _extractedThinkingBlocks even when no cache is provided', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+
+      client.convertAnthropicResponse.mockReturnValue({
+        id: 'anthropic-converted',
+        _extractedThinkingBlocks: {
+          firstToolUseId: 'toolu_02',
+          blocks: [{ type: 'thinking', thinking: 'x', signature: 'y' }],
+        },
+      });
+
+      const forward = mockForward({}, { isAnthropic: true });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      const sentBody = res.json.mock.calls[0][0];
+      expect(sentBody._extractedThinkingBlocks).toBeUndefined();
+    });
+
+    it('should collect ChatGPT SSE response for non-streaming requests', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const sseText = 'event: response.output_text.delta\ndata: {"delta":"Hi"}\n\n';
+      const forward = mockForward(sseText, { isChatGpt: true });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(client.collectChatGptSseResponse).toHaveBeenCalledWith(sseText, meta.model);
+      expect(forward.response.text).toHaveBeenCalled();
+    });
+
+    it('should pass through standard OpenAI response', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const body = {
+        id: 'chatcmpl-123',
+        usage: { prompt_tokens: 50, completion_tokens: 25 },
+      };
+      const forward = mockForward(body);
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(usage).toEqual({
+        prompt_tokens: 50,
+        completion_tokens: 25,
+        cache_read_tokens: undefined,
+        cache_creation_tokens: undefined,
+      });
+      expect(res.json).toHaveBeenCalledWith(body);
+    });
+
+    it('should extract cached prompt tokens from prompt_tokens_details', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const body = {
+        id: 'chatcmpl-cached',
+        usage: {
+          prompt_tokens: 50,
+          completion_tokens: 25,
+          prompt_tokens_details: { cached_tokens: 12 },
+        },
+      };
+      const forward = mockForward(body);
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(usage).toEqual({
+        prompt_tokens: 50,
+        completion_tokens: 25,
+        cache_read_tokens: 12,
+        cache_creation_tokens: undefined,
+      });
+    });
+
+    it('should pass through native Responses JSON and extract Responses usage', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const body = {
+        id: 'resp_123',
+        object: 'response',
+        usage: {
+          input_tokens: 50,
+          input_tokens_details: { cached_tokens: 20 },
+          output_tokens: 25,
+          total_tokens: 75,
+        },
+      };
+      const forward = mockForward(body, { isResponses: true });
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'responses',
+      );
+
+      expect(usage).toEqual({
+        prompt_tokens: 50,
+        completion_tokens: 25,
+        cache_read_tokens: 20,
+        cache_creation_tokens: 0,
+      });
+      expect(res.json).toHaveBeenCalledWith(body);
+    });
+
+    it('should collect native Responses SSE for non-streaming Responses clients', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const response = { id: 'resp_done', object: 'response', output: [] };
+      const sse = `event: response.completed\ndata: ${JSON.stringify({ response })}\n\n`;
+      const forward = mockForward(sse, {
+        isResponses: true,
+        contentType: 'text/event-stream',
+      });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'responses',
+      );
+
+      expect(forward.response.text).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(response);
+    });
+
+    it('should collect native Responses SSE even when content type is not SSE', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const response = { id: 'resp_done', object: 'response', output: [] };
+      const sse = `event: response.completed\ndata: ${JSON.stringify({ response })}\n\n`;
+      const forward = mockForward(sse, {
+        isResponses: true,
+        contentType: 'application/json',
+      });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'responses',
+      );
+
+      expect(forward.response.text).toHaveBeenCalled();
+      expect(forward.response.json).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith(response);
+    });
+
+    it('converts a chat_completions response into Anthropic Messages when apiMode=messages', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const body = {
+        id: 'cc_42',
+        choices: [{ message: { content: 'hello' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 6, completion_tokens: 4 },
+      };
+      const forward = mockForward(body);
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        'messages',
+      );
+
+      const sent = (res.json as jest.Mock).mock.calls[0][0];
+      expect(sent.type).toBe('message');
+      expect(sent.role).toBe('assistant');
+      expect(sent.content).toEqual([{ type: 'text', text: 'hello' }]);
+      expect(sent.stop_reason).toBe('end_turn');
+      expect(sent.usage).toMatchObject({ input_tokens: 6, output_tokens: 4 });
+      expect(usage).toMatchObject({ prompt_tokens: 6, completion_tokens: 4 });
+    });
+
+    it('should return null usage when no usage data in response', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const forward = mockForward({ id: 'chatcmpl-123' });
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(usage).toBeNull();
+    });
+
+    it('should return null usage when prompt_tokens is not a number', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const forward = mockForward({ usage: { prompt_tokens: 'not-a-number' } });
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(usage).toBeNull();
+    });
+
+    it('should include cache tokens in usage when present', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const body = {
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          cache_read_tokens: 20,
+          cache_creation_tokens: 10,
+        },
+      };
+      const forward = mockForward(body);
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(usage).toEqual({
+        prompt_tokens: 100,
+        completion_tokens: 50,
+        cache_read_tokens: 20,
+        cache_creation_tokens: 10,
+      });
+    });
+
+    it('should default completion_tokens to 0 when missing', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const forward = mockForward({ usage: { prompt_tokens: 100 } });
+      const meta = makeMeta();
+
+      const usage = await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+      );
+
+      expect(usage!.completion_tokens).toBe(0);
+    });
+
+    it('should cache extracted thought_signatures from Google non-stream response', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const signatureCache = { store: jest.fn() };
+      const sessionKey = 'sess-456';
+
+      // convertGoogleResponse returns a body with _extractedSignatures
+      client.convertGoogleResponse.mockReturnValue({
+        id: 'google-converted',
+        _extractedSignatures: [
+          { toolCallId: 'call_1', signature: 'sig_a' },
+          { toolCallId: 'call_2', signature: 'sig_b' },
+        ],
+      });
+
+      const forward = mockForward({}, { isGoogle: true });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        signatureCache as any,
+        sessionKey,
+      );
+
+      expect(signatureCache.store).toHaveBeenCalledTimes(2);
+      expect(signatureCache.store).toHaveBeenCalledWith('sess-456', 'call_1', 'sig_a');
+      expect(signatureCache.store).toHaveBeenCalledWith('sess-456', 'call_2', 'sig_b');
+
+      // _extractedSignatures should be deleted from the response body
+      const sentBody = res.json.mock.calls[0][0];
+      expect(sentBody._extractedSignatures).toBeUndefined();
+    });
+
+    it('caches reasoning_content from compatible non-stream responses with tool calls', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const reasoningCache = { store: jest.fn() };
+      const sessionKey = 'sess-reasoning-json';
+      const body = {
+        id: 'chatcmpl-1',
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: '',
+              reasoning_content: 'I should call the tool.',
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'lookup', arguments: '{}' },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      const forward = mockForward(body);
+      const meta = makeMeta({ provider: 'deepseek', model: 'deepseek-chat' });
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        sessionKey,
+        undefined,
+        'chat_completions',
+        undefined,
+        reasoningCache as any,
+      );
+
+      expect(reasoningCache.store).toHaveBeenCalledWith(
+        'sess-reasoning-json',
+        'call_1',
+        'I should call the tool.',
+      );
+      expect(res.json).toHaveBeenCalledWith(body);
+    });
+
+    it('does not cache reasoning_content from strict provider responses', async () => {
+      const { res } = mockResponse();
+      const client = mockProviderClient();
+      const reasoningCache = { store: jest.fn() };
+      const body = {
+        choices: [
+          {
+            message: {
+              reasoning_content: 'unsupported',
+              tool_calls: [{ id: 'call_1', type: 'function', function: {} }],
+            },
+          },
+        ],
+      };
+      const forward = mockForward(body);
+      const meta = makeMeta({ provider: 'mistral', model: 'mistral-large' });
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        meta,
+        {},
+        client as any,
+        undefined,
+        'sess-strict',
+        undefined,
+        'chat_completions',
+        undefined,
+        reasoningCache as any,
+      );
+
+      expect(reasoningCache.store).not.toHaveBeenCalled();
+    });
+  });
+
+  /* ── recordSuccess ── */
+
+  describe('recordSuccess', () => {
+    it('should record fallback success when fallbackFromModel is set with timestamp', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o', fallbackIndex: 1 });
+      const usage: StreamUsage = { prompt_tokens: 100, completion_tokens: 50 };
+
+      recordSuccess(
+        testCtx,
+        meta,
+        usage,
+        '2025-01-01T00:00:00Z',
+        recorder as any,
+        'trace-1',
+        'session-1',
+      );
+
+      expect(recorder.recordFallbackSuccess).toHaveBeenCalledWith(testCtx, 'gpt-4o', 'standard', {
+        traceId: 'trace-1',
+        provider: 'openai',
+        fallbackFromModel: 'gpt-4o',
+        fallbackIndex: 1,
+        timestamp: '2025-01-01T00:00:00Z',
+        authType: undefined,
+        reason: 'auto',
+        usage,
+      });
+    });
+
+    it('should record success message when no fallback and usage exists', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const usage: StreamUsage = { prompt_tokens: 100, completion_tokens: 50 };
+
+      recordSuccess(testCtx, meta, usage, undefined, recorder as any, 'trace-1', 'session-1', 1000);
+
+      expect(recorder.recordSuccessMessage).toHaveBeenCalledWith(
+        testCtx,
+        'gpt-4o',
+        'standard',
+        'auto',
+        usage,
+        {
+          traceId: 'trace-1',
+          provider: 'openai',
+          authType: undefined,
+          sessionKey: 'session-1',
+          durationMs: expect.any(Number),
+          specificityCategory: undefined,
+        },
+      );
+    });
+
+    it('should record with zero-value usage when no fallback and no usage data', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+
+      recordSuccess(testCtx, meta, null, undefined, recorder as any);
+
+      expect(recorder.recordFallbackSuccess).not.toHaveBeenCalled();
+      expect(recorder.recordSuccessMessage).toHaveBeenCalledWith(
+        testCtx,
+        meta.model,
+        meta.tier,
+        meta.reason,
+        { prompt_tokens: 0, completion_tokens: 0 },
+        expect.objectContaining({ authType: meta.auth_type }),
+      );
+    });
+
+    it('should not record fallback success when fallbackFromModel but no timestamp', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o' });
+      const usage: StreamUsage = { prompt_tokens: 100, completion_tokens: 50 };
+
+      recordSuccess(testCtx, meta, usage, undefined, recorder as any);
+
+      expect(recorder.recordFallbackSuccess).not.toHaveBeenCalled();
+      expect(recorder.recordSuccessMessage).toHaveBeenCalled();
+    });
+
+    it('should compute durationMs when startTime is provided', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const usage: StreamUsage = { prompt_tokens: 100, completion_tokens: 50 };
+      const startTime = Date.now() - 500;
+
+      recordSuccess(
+        testCtx,
+        meta,
+        usage,
+        undefined,
+        recorder as any,
+        undefined,
+        undefined,
+        startTime,
+      );
+
+      const call = recorder.recordSuccessMessage.mock.calls[0];
+      const opts = call[5]; // 6th argument (opts object)
+      expect(opts.durationMs).toBeGreaterThanOrEqual(400);
+      expect(opts.durationMs).toBeLessThan(1000);
+    });
+
+    it('should pass undefined durationMs when startTime is not provided', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const usage: StreamUsage = { prompt_tokens: 100, completion_tokens: 50 };
+
+      recordSuccess(testCtx, meta, usage, undefined, recorder as any);
+
+      const call = recorder.recordSuccessMessage.mock.calls[0];
+      const opts = call[5]; // 6th argument (opts object)
+      expect(opts.durationMs).toBeUndefined();
+    });
+
+    it('should pass streamUsage as undefined when null in fallback success', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o', fallbackIndex: 0 });
+
+      recordSuccess(testCtx, meta, null, '2025-01-01T00:00:00Z', recorder as any);
+
+      expect(recorder.recordFallbackSuccess).toHaveBeenCalledWith(testCtx, 'gpt-4o', 'standard', {
+        traceId: undefined,
+        provider: 'openai',
+        fallbackFromModel: 'gpt-4o',
+        fallbackIndex: 0,
+        timestamp: '2025-01-01T00:00:00Z',
+        authType: undefined,
+        reason: 'auto',
+        usage: undefined,
+      });
+    });
+
+    it('defaults fallbackIndex to 0 when meta does not set one', () => {
+      const recorder = mockRecorder();
+      // fallbackFromModel is set, timestamp is set, but fallbackIndex is undefined.
+      // Exercises the `meta.fallbackIndex ?? 0` branch.
+      const meta = makeMeta({ fallbackFromModel: 'claude-3' });
+
+      recordSuccess(testCtx, meta, null, '2025-01-01T00:00:00Z', recorder as any);
+
+      expect(recorder.recordFallbackSuccess).toHaveBeenCalledWith(
+        testCtx,
+        'gpt-4o',
+        'standard',
+        expect.objectContaining({ fallbackIndex: 0 }),
+      );
+    });
+
+    it('should pass specificityCategory when set on meta', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ specificity_category: 'coding' });
+      const usage: StreamUsage = { prompt_tokens: 100, completion_tokens: 50 };
+
+      recordSuccess(testCtx, meta, usage, undefined, recorder as any, 'trace-1', 'session-1');
+
+      expect(recorder.recordSuccessMessage).toHaveBeenCalledWith(
+        testCtx,
+        'gpt-4o',
+        'standard',
+        'auto',
+        usage,
+        expect.objectContaining({ specificityCategory: 'coding' }),
+      );
+    });
+
+    it('includes recordingPayload when capture yields a non-overflowed body', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const capture = {
+        overflowed: false,
+        responseHeaders: { 'content-type': 'application/json' },
+        buildResponseBody: () => ({ type: 'json', body: { ok: true } }),
+        getSizeBytes: () => 42,
+      };
+
+      recordSuccess(
+        testCtx,
+        meta,
+        { prompt_tokens: 1, completion_tokens: 1 },
+        undefined,
+        recorder as any,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        null,
+        { capture: capture as never, requestBody: { messages: [] } },
+      );
+
+      const call = recorder.recordSuccessMessage.mock.calls[0];
+      const opts = call[5];
+      expect(opts.recordingPayload).toEqual({
+        request_body: { messages: [] },
+        response_body: { type: 'json', body: { ok: true } },
+        response_headers: { 'content-type': 'application/json' },
+        size_bytes: 42,
+      });
+    });
+
+    it('omits recordingPayload when capture is overflowed', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const capture = {
+        overflowed: true,
+        responseHeaders: {},
+        buildResponseBody: () => null,
+        getSizeBytes: () => 0,
+      };
+
+      recordSuccess(
+        testCtx,
+        meta,
+        null,
+        undefined,
+        recorder as any,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        null,
+        { capture: capture as never, requestBody: {} },
+      );
+
+      const opts = recorder.recordSuccessMessage.mock.calls[0][5];
+      expect(opts.recordingPayload).toBeUndefined();
+    });
+
+    it('omits recordingPayload when capture yields no body', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const capture = {
+        overflowed: false,
+        responseHeaders: {},
+        buildResponseBody: () => null,
+        getSizeBytes: () => 0,
+      };
+
+      recordSuccess(
+        testCtx,
+        meta,
+        null,
+        undefined,
+        recorder as any,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        null,
+        { capture: capture as never, requestBody: {} },
+      );
+
+      const opts = recorder.recordSuccessMessage.mock.calls[0][5];
+      expect(opts.recordingPayload).toBeUndefined();
+    });
+  });
+
+  describe('capture sink propagation', () => {
+    it('handleStreamResponse seeds captured response headers on the sink', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const streamWriter = require('../stream-writer');
+      const pipeSpy = jest.spyOn(streamWriter, 'pipeStream').mockResolvedValue(null);
+      const initSpy = jest.spyOn(streamWriter, 'initSseHeaders').mockImplementation(() => {});
+
+      const { res } = mockResponse();
+      const headersObj = new Headers();
+      headersObj.set('x-trace', 'abc');
+      const forward = {
+        response: { body: { getReader: jest.fn() }, headers: headersObj },
+        isGoogle: false,
+        isAnthropic: false,
+        isChatGpt: false,
+      };
+      const client = {
+        convertGoogleStreamChunk: jest.fn(),
+        createAnthropicStreamTransformer: jest.fn(),
+        convertChatGptStreamChunk: jest.fn(),
+      };
+      const capture = {
+        setHeaders: jest.fn(),
+        appendRaw: jest.fn(),
+      };
+
+      await handleStreamResponse(
+        res as any,
+        forward as any,
+        makeMeta(),
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        capture as any,
+      );
+
+      expect(capture.setHeaders).toHaveBeenCalledWith({ 'x-trace': 'abc' });
+      expect(pipeSpy).toHaveBeenCalled();
+      pipeSpy.mockRestore();
+      initSpy.mockRestore();
+    });
+
+    it('handleNonStreamResponse writes JSON body into capture', async () => {
+      const { res } = mockResponse();
+      const headersObj = new Headers();
+      headersObj.set('content-type', 'application/json');
+      const json = {
+        choices: [{ message: { content: 'hi' } }],
+        usage: { prompt_tokens: 2, completion_tokens: 1 },
+      };
+      const forward = {
+        response: {
+          headers: headersObj,
+          json: jest.fn().mockResolvedValue(json),
+        },
+        isGoogle: false,
+        isAnthropic: false,
+        isChatGpt: false,
+      };
+      const client = {
+        convertGoogleResponse: jest.fn(),
+        convertAnthropicResponse: jest.fn(),
+        collectChatGptSseResponse: jest.fn(),
+      };
+      const capture = {
+        setHeaders: jest.fn(),
+        setJson: jest.fn(),
+      };
+
+      await handleNonStreamResponse(
+        res as any,
+        forward as any,
+        makeMeta(),
+        {},
+        client as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        capture as any,
+      );
+
+      expect(capture.setHeaders).toHaveBeenCalled();
+      expect(capture.setJson).toHaveBeenCalledWith(json);
+    });
+  });
+
+  describe('requestHeaders propagation', () => {
+    const headers = { 'x-custom-foo': 'bar' };
+
+    it('handleProviderError forwards requestHeaders to recordProviderError', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        buildMetaHeaders(meta),
+        500,
+        'boom',
+        undefined,
+        recorder as any,
+        'trace-1',
+        null,
+        headers,
+      );
+      expect(recorder.recordProviderError).toHaveBeenCalledWith(
+        testCtx,
+        500,
+        'boom',
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+    });
+
+    it('fallback-exhausted path forwards requestHeaders to both failure recorders', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      const failedFallbacks: FailedFallback[] = [
+        {
+          model: 'claude-3-haiku',
+          provider: 'anthropic',
+          fallbackIndex: 0,
+          status: 429,
+          errorBody: '',
+        },
+      ];
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        buildMetaHeaders(meta),
+        502,
+        'fail',
+        failedFallbacks,
+        recorder as any,
+        undefined,
+        null,
+        headers,
+      );
+      expect(recorder.recordFailedFallbacks).toHaveBeenCalledWith(
+        testCtx,
+        'standard',
+        'gpt-4o',
+        failedFallbacks,
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalledWith(
+        testCtx,
+        'standard',
+        'gpt-4o',
+        'fail',
+        expect.any(String),
+        undefined,
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+    });
+
+    it('recordFallbackFailures forwards requestHeaders to both failure recorders', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({
+        fallbackFromModel: 'claude-sonnet-4',
+        primaryProvider: 'anthropic',
+      });
+      const failedFallbacks: FailedFallback[] = [
+        { model: 'x', provider: 'y', fallbackIndex: 0, status: 500, errorBody: '' },
+      ];
+      recordFallbackFailures(testCtx, meta, failedFallbacks, recorder as any, null, headers);
+      expect(recorder.recordPrimaryFailure).toHaveBeenCalledWith(
+        testCtx,
+        'standard',
+        'claude-sonnet-4',
+        expect.any(String),
+        expect.any(String),
+        undefined,
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+      expect(recorder.recordFailedFallbacks).toHaveBeenCalledWith(
+        testCtx,
+        'standard',
+        'claude-sonnet-4',
+        failedFallbacks,
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+    });
+
+    it('recordFallbackFailures threads meta.reason into the recordFailedFallbacks opts', () => {
+      // Sibling rows (the failed fallbacks of a fallback-success flow) must
+      // inherit the same routing_reason as the success row, otherwise the
+      // Messages log shows split reasons for one logical request.
+      const recorder = mockRecorder();
+      const meta = makeMeta({
+        fallbackFromModel: 'claude-sonnet-4',
+        primaryProvider: 'anthropic',
+        reason: 'header-match',
+      });
+      const failedFallbacks: FailedFallback[] = [
+        { model: 'x', provider: 'y', fallbackIndex: 0, status: 500, errorBody: '' },
+      ];
+      recordFallbackFailures(testCtx, meta, failedFallbacks, recorder as any);
+      expect(recorder.recordFailedFallbacks).toHaveBeenCalledWith(
+        testCtx,
+        'standard',
+        'claude-sonnet-4',
+        failedFallbacks,
+        expect.objectContaining({ reason: 'header-match' }),
+      );
+    });
+
+    it('recordSuccess forwards requestHeaders on the success-message path', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta();
+      recordSuccess(
+        testCtx,
+        meta,
+        { prompt_tokens: 1, completion_tokens: 1 },
+        undefined,
+        recorder as any,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        headers,
+      );
+      expect(recorder.recordSuccessMessage).toHaveBeenCalledWith(
+        testCtx,
+        'gpt-4o',
+        'standard',
+        'auto',
+        expect.anything(),
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+    });
+
+    it('recordSuccess forwards requestHeaders on the fallback-success path', () => {
+      const recorder = mockRecorder();
+      const meta = makeMeta({ fallbackFromModel: 'gpt-4o', fallbackIndex: 1 });
+      recordSuccess(
+        testCtx,
+        meta,
+        { prompt_tokens: 1, completion_tokens: 1 },
+        '2025-01-01T00:00:00Z',
+        recorder as any,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        headers,
+      );
+      expect(recorder.recordFallbackSuccess).toHaveBeenCalledWith(
+        testCtx,
+        'gpt-4o',
+        'standard',
+        expect.objectContaining({ requestHeaders: headers }),
+      );
+    });
+  });
+
+  describe('CodeAssist envelope in handleStreamResponse', () => {
+    function mockForward(
+      flags: {
+        isGoogle?: boolean;
+        isCodeAssist?: boolean;
+      } = {},
+    ) {
+      return {
+        response: { body: { getReader: jest.fn() } },
+        isGoogle: flags.isGoogle ?? false,
+        isAnthropic: false,
+        isChatGpt: false,
+        isResponses: false,
+        isCodeAssist: flags.isCodeAssist ?? false,
+      };
+    }
+
+    function mockProviderClient() {
+      return {
+        convertGoogleStreamChunk: jest
+          .fn()
+          .mockReturnValue({ chunk: 'data: out\n\n', signatures: [] }),
+        createAnthropicStreamTransformer: jest.fn().mockReturnValue(jest.fn()),
+        convertChatGptStreamChunk: jest.fn(),
+      };
+    }
+
+    let pipeStreamSpy: jest.SpyInstance;
+    let initSseHeadersSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const streamWriter = require('../stream-writer');
+      pipeStreamSpy = jest.spyOn(streamWriter, 'pipeStream').mockResolvedValue(null);
+      initSseHeadersSpy = jest.spyOn(streamWriter, 'initSseHeaders').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      pipeStreamSpy?.mockRestore();
+      initSseHeadersSpy?.mockRestore();
+    });
+
+    it('unwraps CodeAssist envelope before passing chunk to convertGoogleStreamChunk', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isGoogle: true, isCodeAssist: true });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      let capturedTransform: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_b: unknown, _r: unknown, transform?: (c: string) => string | null) => {
+          capturedTransform = transform;
+          return null;
+        },
+      );
+      client.convertGoogleStreamChunk.mockReturnValue({
+        chunk: 'data: converted\n\n',
+        signatures: [],
+      });
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      expect(capturedTransform).toBeDefined();
+      // pipeStream passes the parsed SSE payload, not the raw data: line.
+      const inner = { candidates: [{ content: 'hello' }] };
+      const wrapped = JSON.stringify({ response: inner });
+      capturedTransform!(wrapped);
+
+      // convertGoogleStreamChunk receives the bare Gemini payload.
+      const calledWith = client.convertGoogleStreamChunk.mock.calls[0][0] as string;
+      expect(calledWith).toBe(JSON.stringify(inner));
+    });
+
+    it('does not unwrap when isCodeAssist is false (plain Google path)', async () => {
+      const { res } = mockResponse();
+      const forward = mockForward({ isGoogle: true, isCodeAssist: false });
+      const client = mockProviderClient();
+      const meta = makeMeta();
+
+      let capturedTransform: ((chunk: string) => string | null) | undefined;
+      pipeStreamSpy.mockImplementation(
+        async (_b: unknown, _r: unknown, transform?: (c: string) => string | null) => {
+          capturedTransform = transform;
+          return null;
+        },
+      );
+      client.convertGoogleStreamChunk.mockReturnValue({ chunk: 'data: out\n\n', signatures: [] });
+
+      await handleStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      const wrapped = `data: ${JSON.stringify({ response: { candidates: [] } })}\n`;
+      capturedTransform!(wrapped);
+
+      // Without unwrapping, the raw wrapped chunk is passed through.
+      const calledWith = client.convertGoogleStreamChunk.mock.calls[0][0] as string;
+      expect(calledWith).toContain('"response"');
+    });
+  });
+
+  describe('CodeAssist envelope in handleNonStreamResponse', () => {
+    function makeNonStreamForward(
+      body: unknown,
+      flags: { isGoogle?: boolean; isCodeAssist?: boolean } = {},
+    ) {
+      return {
+        response: {
+          json: jest.fn().mockResolvedValue(body),
+          text: jest.fn().mockResolvedValue(JSON.stringify(body)),
+          headers: { get: jest.fn().mockReturnValue('application/json') },
+        },
+        isGoogle: flags.isGoogle ?? false,
+        isAnthropic: false,
+        isChatGpt: false,
+        isResponses: false,
+        isCodeAssist: flags.isCodeAssist ?? false,
+      };
+    }
+
+    function mockNonStreamClient() {
+      return {
+        convertGoogleResponse: jest.fn().mockReturnValue({ id: 'converted' }),
+        convertAnthropicResponse: jest.fn(),
+        convertChatGptResponse: jest.fn(),
+        collectChatGptSseResponse: jest.fn(),
+      };
+    }
+
+    it('unwraps CodeAssist response envelope before calling convertGoogleResponse', async () => {
+      const { res } = mockResponse();
+      const client = mockNonStreamClient();
+      const inner = { candidates: [{ text: 'hello' }] };
+      const wrapped = { response: inner, traceId: 'abc' };
+      const forward = makeNonStreamForward(wrapped, { isGoogle: true, isCodeAssist: true });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      // The unwrapped inner object must be passed to convertGoogleResponse.
+      expect(client.convertGoogleResponse).toHaveBeenCalledWith(inner, meta.model);
+    });
+
+    it('does not unwrap for plain Google responses (no CodeAssist envelope)', async () => {
+      const { res } = mockResponse();
+      const client = mockNonStreamClient();
+      const rawBody = { candidates: [{ text: 'hello' }] };
+      const forward = makeNonStreamForward(rawBody, { isGoogle: true, isCodeAssist: false });
+      const meta = makeMeta();
+
+      await handleNonStreamResponse(res as any, forward as any, meta, {}, client as any);
+
+      // Raw body (not unwrapped) is passed to convertGoogleResponse.
+      expect(client.convertGoogleResponse).toHaveBeenCalledWith(rawBody, meta.model);
+    });
+  });
+
+  describe('handleProviderError with specificity', () => {
+    it('should pass specificityCategory to recordProviderError', async () => {
+      const { res } = mockResponse();
+      const recorder = mockRecorder();
+      const meta = makeMeta({ specificity_category: 'coding' });
+      const metaHeaders = buildMetaHeaders(meta);
+
+      await handleProviderError(
+        res as any,
+        testCtx,
+        meta,
+        metaHeaders,
+        500,
+        'Internal Server Error',
+        undefined,
+        recorder as any,
+        'trace-1',
+      );
+
+      expect(recorder.recordProviderError).toHaveBeenCalledWith(
+        testCtx,
+        500,
+        'Internal Server Error',
+        expect.objectContaining({ specificityCategory: 'coding' }),
+      );
+    });
+  });
+});

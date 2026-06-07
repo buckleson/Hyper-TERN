@@ -1,0 +1,5 @@
+interface:
+  display_name: "Hyper-Tern Installer"
+  short_description: "Install and operate Hyper-Tern self-hosted"
+  brand_color: "#14B8A6"
+  default_prompt: "Use $hyper-tern to install Hyper-Tern locally with Docker and verify the service is healthy."

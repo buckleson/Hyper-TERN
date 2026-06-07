@@ -1,0 +1,17 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts", "tsx"],
+  "rootDir": ".",
+  "coverageDirectory": "../coverage",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.tsx?$": "ts-jest",
+    "^.+\\.mjs$": "ts-jest"
+  },
+  "transformIgnorePatterns": [
+    "node_modules/(?!(better-auth|better-call|@better-auth)/)"
+  ],
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/../src/$1"
+  }
+}

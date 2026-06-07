@@ -1,0 +1,89 @@
+/* ── Custom Select (shadcn style) ─────────────────── */
+.custom-select {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-select__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 2rem;
+  padding: 0 8px 0 10px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border) / 0.85);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  font-weight: 400;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  white-space: nowrap;
+}
+
+.custom-select__trigger:hover {
+  border-color: hsl(var(--primary) / 0.32);
+}
+
+.custom-select__trigger--open {
+  border-color: hsl(var(--primary) / 0.42);
+  box-shadow: var(--focus-ring);
+}
+
+.custom-select__value {
+  flex: 1;
+  text-align: left;
+}
+
+.custom-select__chevron {
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.custom-select__trigger--open .custom-select__chevron {
+  transform: rotate(180deg);
+}
+
+.custom-select__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: max(100%, 140px);
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border) / 0.85);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow-hover);
+  padding: 4px 0;
+  z-index: 50;
+  animation: fadeInUp 100ms ease-out;
+}
+
+.custom-select__option {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: hsl(var(--popover-foreground));
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  white-space: nowrap;
+  text-align: left;
+}
+
+.custom-select__option:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.custom-select__option--selected {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  font-weight: 500;
+}

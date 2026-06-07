@@ -1,0 +1,113 @@
+# Hyper-Tern
+
+Hyper-Tern is an open-source model router for AI agents. It sits between your agent and your LLM providers, understands the request, and routes it to the cheapest model that can do the job. Think of it as the practical combination of OpenRouter-style model access and LiteLLM-style gateway control, with a dashboard that shows exactly where your money goes.
+
+Use Hyper-Tern when you want one OpenAI-compatible endpoint for cloud models, subscription providers, custom OpenAI-compatible APIs, and local inference servers.
+
+## Why Teams Use It
+
+- **Route by task, not guesswork**: Hyper-Tern scores every request and sends simple work to cheap models while preserving stronger models for harder prompts.
+- **Run local models for basic tasks**: connect Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible local server and use local inference for low-risk, low-complexity requests.
+- **Context management**: keep agent traffic organized by tenant, agent, message, provider, tier, routing reason, and fallback chain so debugging does not turn into archaeology.
+- **Fallback when a model fails**: configure fallback models and providers so failed requests can move to the next route automatically.
+- **Track every dollar**: see costs, tokens, messages, providers, agents, and savings across the whole workspace.
+- **Notifications and limits**: set token and cost thresholds so runaway usage gets caught early.
+- **Works with your agent stack**: OpenClaw, Hermes, OpenAI SDK, Vercel AI SDK, LangChain, cURL, or any agent that speaks OpenAI-compatible HTTP.
+- **Self-host first**: Docker ships the frontend, backend, migrations, and PostgreSQL wiring as one local stack.
+
+## One-Line Install
+
+macOS / Linux:
+
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh)
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.ps1 | iex
+```
+
+The installer downloads the Docker Compose file, creates a local `.env`, generates `BETTER_AUTH_SECRET`, starts PostgreSQL and Hyper-Tern, then waits for `http://localhost:2099/api/v1/health`.
+
+Prefer to inspect before running:
+
+```bash
+curl -sSLO https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh
+bash install.sh --dry-run
+bash install.sh
+```
+
+## AI-Assisted Install
+
+This repo includes a Codex skill at `.codex/skills/hyper-tern-installer/SKILL.md`. Give that skill to an AI coding agent and ask:
+
+```text
+Use the Hyper-Tern installer skill to install Hyper-Tern on this machine.
+```
+
+The skill tells the agent how to detect the OS, verify Docker Compose, choose the right one-line installer, run a dry run when appropriate, start the stack, and confirm the health endpoint. It is intentionally small so the AI can figure out the host-specific details without hardcoding one environment.
+
+## Docker
+
+The shipped self-host image is:
+
+```bash
+docker pull hypertern/hyper-tern:latest
+```
+
+Manual Compose install:
+
+```bash
+curl -O https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/docker-compose.yml
+curl -O https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/.env.example
+cp .env.example .env
+openssl rand -hex 32
+docker compose up -d
+```
+
+Open `http://localhost:2099` and create the first admin account.
+
+The current canonical release package is `packages/hyper-tern`, and the Docker release pipeline tags the image from that package version.
+
+## Local Model Routing
+
+Hyper-Tern can route to local inference for basic tasks:
+
+- **Ollama** at `http://host.docker.internal:11434`
+- **LM Studio** at `http://host.docker.internal:1234/v1`
+- **llama.cpp** at `http://host.docker.internal:8080/v1`
+- **Any OpenAI-compatible server** exposed to the container
+
+In self-hosted Docker mode, private and local HTTP provider URLs are allowed so your gateway can reach host-running models without a cloud proxy.
+
+## Core Workflow
+
+1. Install Hyper-Tern with the one-line command or Docker Compose.
+2. Create the first admin account.
+3. Add API keys, subscription providers, or local inference providers.
+4. Point your agent at Hyper-Tern's OpenAI-compatible endpoint.
+5. Configure tiers, fallback models, limits, and notifications.
+6. Watch cost, token, and message analytics from the dashboard.
+
+## OpenAI-Compatible Endpoint
+
+Point agents at:
+
+```text
+http://localhost:2099/v1
+```
+
+Use the API key created for an agent in the dashboard. Hyper-Tern handles scoring, model selection, provider forwarding, logging, fallback routing, and cost attribution.
+
+## More Docs
+
+- Docker guide: `docker/DOCKER_README.md`
+- Docker Compose: `docker/docker-compose.yml`
+- Installer scripts: `docker/install.sh`, `docker/install.ps1`
+- Development guide: `AGENTS.md`
+
+## License
+
+MIT

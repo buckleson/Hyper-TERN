@@ -1,0 +1,156 @@
+import { randomUUID } from 'crypto';
+import { ConfigService } from '@nestjs/config';
+import { Response as ExpressResponse } from 'express';
+import { Tier } from '../../scoring/types';
+import type { ResponseMode } from 'hyper-tern-shared';
+
+export interface FriendlyForward {
+  response: Response;
+  isGoogle: false;
+  isAnthropic: false;
+  isChatGpt: false;
+}
+
+export interface FriendlyResult {
+  forward: FriendlyForward;
+  meta: {
+    tier: Tier;
+    model: string;
+    provider: string;
+    confidence: number;
+    reason: string;
+    response_mode: ResponseMode;
+  };
+}
+
+export type DashboardSection = 'routing' | 'limits';
+
+export function getDashboardUrl(
+  config: ConfigService,
+  agentName?: string,
+  section?: DashboardSection,
+): string {
+  const baseUrl =
+    config.get<string>('app.betterAuthUrl') ||
+    `http://localhost:${config.get<number>('app.port', 3001)}`;
+  if (!agentName) return baseUrl;
+  const suffix = section ? `/${section}` : '';
+  return `${baseUrl}/agents/${encodeURIComponent(agentName)}${suffix}`;
+}
+
+export function buildFriendlyResponse(
+  content: string,
+  stream: boolean,
+  reason = 'friendly_error',
+): FriendlyResult {
+  const id = `chatcmpl-hyper-tern-${randomUUID()}`;
+  const created = Math.floor(Date.now() / 1000);
+
+  const meta: FriendlyResult['meta'] = {
+    tier: 'simple' as Tier,
+    model: 'hyper-tern',
+    provider: 'hyper-tern',
+    confidence: 1,
+    reason,
+    response_mode: stream ? 'stream' : 'buffered',
+  };
+
+  if (stream) {
+    const chunk = {
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model: 'hyper-tern',
+      choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: 'stop' }],
+    };
+    const ssePayload = `data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`;
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(ssePayload));
+        controller.close();
+      },
+    });
+    return {
+      forward: {
+        response: new Response(body, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        }),
+        isGoogle: false,
+        isAnthropic: false,
+        isChatGpt: false,
+      },
+      meta,
+    };
+  }
+
+  const responseBody = {
+    id,
+    object: 'chat.completion',
+    created,
+    model: 'hyper-tern',
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+  };
+
+  return {
+    forward: {
+      response: new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      isGoogle: false,
+      isAnthropic: false,
+      isChatGpt: false,
+    },
+    meta,
+  };
+}
+
+/**
+ * Sends a friendly chat completion response directly to the Express response.
+ * Used by the exception filter where we don't return a ProxyResult.
+ */
+export function sendFriendlyResponse(res: ExpressResponse, content: string, stream: boolean): void {
+  const id = `chatcmpl-hyper-tern-${randomUUID()}`;
+  const created = Math.floor(Date.now() / 1000);
+
+  if (stream) {
+    const chunk = {
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model: 'hyper-tern',
+      choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: 'stop' }],
+    };
+    const ssePayload = `data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.status(200).send(ssePayload);
+  } else {
+    const responseBody = {
+      id,
+      object: 'chat.completion',
+      created,
+      model: 'hyper-tern',
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    };
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json(responseBody);
+  }
+}

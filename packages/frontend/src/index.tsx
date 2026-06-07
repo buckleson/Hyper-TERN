@@ -1,0 +1,87 @@
+/* @refresh reload */
+import { render } from 'solid-js/web';
+import { Router, Route } from '@solidjs/router';
+import { MetaProvider, Title } from '@solidjs/meta';
+import App from './App.jsx';
+import AuthLayout from './layouts/AuthLayout.jsx';
+import Workspace from './pages/Workspace.jsx';
+import AgentGuard from './components/AgentGuard.jsx';
+import GuestGuard from './components/GuestGuard.jsx';
+import NotFound from './pages/NotFound.jsx';
+import ToastContainer from './components/ToastContainer.jsx';
+import { lazyReload, clearReloadFlag } from './services/lazy-reload.js';
+import type { ParentComponent } from 'solid-js';
+import './styles/theme.css';
+
+clearReloadFlag();
+
+const Overview = lazyReload(() => import('./pages/Overview.jsx'));
+const MessageLog = lazyReload(() => import('./pages/MessageLog.jsx'));
+const Settings = lazyReload(() => import('./pages/Settings.jsx'));
+const Routing = lazyReload(() => import('./pages/Routing.jsx'));
+const Playground = lazyReload(() => import('./pages/Playground.jsx'));
+const Limits = lazyReload(() => import('./pages/Limits.jsx'));
+const Account = lazyReload(() => import('./pages/Account.jsx'));
+const Login = lazyReload(() => import('./pages/Login.jsx'));
+const Register = lazyReload(() => import('./pages/Register.jsx'));
+const ResetPassword = lazyReload(() => import('./pages/ResetPassword.jsx'));
+const Setup = lazyReload(() => import('./pages/Setup.jsx'));
+const Help = lazyReload(() => import('./pages/Help.jsx'));
+const FreeModels = lazyReload(() => import('./pages/FreeModels.jsx'));
+const ConnectProvider = lazyReload(() => import('./pages/ConnectProvider.jsx'));
+
+const GuestLayout: ParentComponent = (props) => (
+  <GuestGuard>
+    <AuthLayout>{props.children}</AuthLayout>
+  </GuestGuard>
+);
+
+// Remove the static <title> from index.html so @solidjs/meta can manage
+// document.title via its own <title> elements. The static tag is kept in
+// index.html for SEO (pre-JS crawlers / Lighthouse) but must be removed
+// before MetaProvider renders, otherwise the browser always picks the first
+// <title> in the DOM and ignores the dynamic ones.
+document.head.querySelector('title')?.remove();
+
+const root = document.getElementById('root');
+
+if (!root) {
+  throw new Error('Root element not found');
+}
+
+render(
+  () => (
+    <MetaProvider>
+      <Title>Hyper-Tern</Title>
+      <ToastContainer />
+      <Router>
+        <Route path="/" component={App}>
+          <Route path="/" component={Workspace} />
+          <Route path="/agents/:agentName" component={AgentGuard}>
+            <Route path="/" component={Overview} />
+            <Route path="/messages" component={MessageLog} />
+            <Route path="/settings/*" component={Settings} />
+            <Route path="/routing" component={Routing} />
+            <Route path="/playground" component={Playground} />
+            <Route path="/limits" component={Limits} />
+            <Route path="/free-models" component={FreeModels} />
+
+            <Route path="/help" component={Help} />
+          </Route>
+          <Route path="/connect-provider" component={ConnectProvider} />
+          <Route path="/account" component={Account} />
+        </Route>
+        <Route path="/" component={GuestLayout}>
+          <Route path="/login" component={Login} />
+          <Route path="/register" component={Register} />
+          <Route path="/reset-password" component={ResetPassword} />
+        </Route>
+        <Route path="/setup" component={AuthLayout}>
+          <Route path="/" component={Setup} />
+        </Route>
+        <Route path="*404" component={NotFound} />
+      </Router>
+    </MetaProvider>
+  ),
+  root,
+);

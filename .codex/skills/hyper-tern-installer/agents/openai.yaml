@@ -1,0 +1,7 @@
+interface:
+  display_name: "Hyper-Tern Installer"
+  short_description: "Install and verify Hyper-Tern with Docker"
+  default_prompt: "Use $hyper-tern-installer to install Hyper-Tern on this machine and verify the local dashboard is healthy."
+
+policy:
+  allow_implicit_invocation: true
