@@ -1,8 +1,15 @@
 # Hyper-Tern
 
-Hyper-Tern is an open-source model router for AI agents. It sits between your agent and your LLM providers, understands the request, and routes it to the cheapest model that can do the job. Think of it as the practical combination of OpenRouter-style model access and LiteLLM-style gateway control, with a dashboard that shows exactly where your money goes.
+**Stop overpaying for agent LLM calls.**
 
-Use Hyper-Tern when you want one OpenAI-compatible endpoint for cloud models, subscription providers, custom OpenAI-compatible APIs, and local inference servers.
+Hyper-Tern is an open-source model router for AI agents. It gives your agent one OpenAI-compatible endpoint, then decides where each request should go: cloud model, subscription provider, custom API, or local inference server.
+
+- ⚡ **Smart routing**: send simple tasks to cheaper models and save stronger models for harder work.
+- 💸 **Cost control**: track every dollar, token, message, provider, and fallback from one dashboard.
+- 🧠 **Local inference**: run basic tasks on Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible local server.
+- 🔁 **Automatic fallbacks**: retry failed queries on different models or providers without rewriting your agent.
+- 🧩 **OpenRouter + LiteLLM energy**: model access like OpenRouter, gateway control like LiteLLM, packaged as a self-hosted product.
+- 🚀 **One-command setup**: install with Docker, then let Hyper-Tern handle routing, observability, limits, and notifications.
 
 ## Why Teams Use It
 
