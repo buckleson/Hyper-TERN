@@ -18,15 +18,7 @@ const hyperTernVersion = (() => {
 export default defineConfig(({ command }) => ({
   define: {
     __HYPER_TERN_VERSION__: JSON.stringify(hyperTernVersion),
-    // The Wingman drawer and the orange "Dev" header badge are dev-only
-    // affordances. They ship only when Vite runs in dev mode
-    // (`vite serve`). Any production build — Docker self-hosted, Railway
-    // cloud, anything else — gets `__DEV_MODE__ = false`, so esbuild
-    // dead-code-eliminates the FAB, drawer, and badge.
     __DEV_MODE__: JSON.stringify(command === 'serve'),
-    // Optional build-time override for the Wingman drawer; otherwise it
-    // points at the hosted SPA at https://wingman.hyper-tern.build.
-    __WINGMAN_URL__: JSON.stringify(process.env.VITE_WINGMAN_URL || ''),
   },
   plugins: [
     solidPlugin(),
@@ -42,9 +34,8 @@ export default defineConfig(({ command }) => ({
     // OPTIONS preflights for proxied paths (e.g. `/api`, `/v1`) and
     // strips the backend's headers — including
     // `Access-Control-Allow-Private-Network`, which Chrome's Private
-    // Network Access enforcement now requires when the hosted Wingman
-    // SPA (https://wingman.hyper-tern.build) calls into a loopback dev
-    // backend. The dashboard itself is same-origin, so it doesn't need
+    // Network Access enforcement can require backend headers for loopback
+    // calls. The dashboard itself is same-origin, so it doesn't need
     // Vite's CORS at all.
     cors: false,
     proxy: {

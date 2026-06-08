@@ -5,10 +5,10 @@
   "homepage": "https://hyper-tern.build",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheHyper-TERN/hyper-tern"
+    "url": "https://github.com/buckleson/Hyper-TERN"
   },
   "bugs": {
-    "url": "https://github.com/TheHyper-TERN/hyper-tern/issues"
+    "url": "https://github.com/buckleson/Hyper-TERN/issues"
   },
   "author": "Hyper-Tern Inc.",
   "license": "MIT",

@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { Public } from '../common/decorators/public.decorator';
 
-const GITHUB_REPO = 'TheHyper-TERN/hyper-tern';
+const GITHUB_REPO = 'buckleson/Hyper-TERN';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 let cachedStars: number | null = null;

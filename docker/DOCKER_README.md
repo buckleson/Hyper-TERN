@@ -1,16 +1,16 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/HEAD/.github/assets/logo-white.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/HEAD/.github/assets/logo-dark.svg" />
-    <img src="https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/HEAD/.github/assets/logo-dark.svg" alt="Hyper-Tern" height="53" title="Hyper-Tern"/>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/buckleson/Hyper-TERN/HEAD/.github/assets/logo-white.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/buckleson/Hyper-TERN/HEAD/.github/assets/logo-dark.svg" />
+    <img src="https://raw.githubusercontent.com/buckleson/Hyper-TERN/HEAD/.github/assets/logo-dark.svg" alt="Hyper-Tern" height="53" title="Hyper-Tern"/>
   </picture>
 </p>
 <p align="center">
   <a href="https://hub.docker.com/r/hypertern/hyper-tern"><img src="https://img.shields.io/docker/pulls/hypertern/hyper-tern?color=2496ED&label=docker%20pulls" alt="Docker pulls" /></a>
   &nbsp;
-  <a href="https://github.com/TheHyper-TERN/hyper-tern/stargazers"><img src="https://img.shields.io/github/stars/TheHyper-TERN/hyper-tern?style=flat" alt="GitHub stars" /></a>
+  <a href="https://github.com/buckleson/Hyper-TERN/stargazers"><img src="https://img.shields.io/github/stars/buckleson/Hyper-TERN?style=flat" alt="GitHub stars" /></a>
   &nbsp;
-  <a href="https://github.com/TheHyper-TERN/hyper-tern/blob/main/LICENSE"><img src="https://img.shields.io/github/license/TheHyper-TERN/hyper-tern?color=blue" alt="license" /></a>
+  <a href="https://github.com/buckleson/Hyper-TERN/blob/main/LICENSE"><img src="https://img.shields.io/github/license/buckleson/Hyper-TERN?color=blue" alt="license" /></a>
   &nbsp;
   <a href="https://discord.gg/FepAked3W7"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
@@ -29,7 +29,7 @@ Think of it as the practical combination of OpenRouter-style model access and Li
 - Set notifications and limits before usage gets expensive
 - Self-host: your requests, your providers, your data
 
-![Hyper-Tern-gh](https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/HEAD/.github/assets/hyper-tern-screenshot.png)
+![Hyper-Tern-gh](https://raw.githubusercontent.com/buckleson/Hyper-TERN/HEAD/.github/assets/hyper-tern-screenshot.png)
 
 ## Table of contents
 
@@ -77,13 +77,13 @@ Three paths, ordered from fastest to most hands-on. All three end in the same pl
 One command. The installer downloads the compose file, generates a secret, and brings up the stack. Give it about 30 seconds to boot.
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh)
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.ps1 | iex
+irm https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.ps1 | iex
 ```
 
 <details>
@@ -92,7 +92,7 @@ irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/insta
 Download the script:
 
 ```bash
-curl -sSLO https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh
+curl -sSLO https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh
 ```
 
 Review it (optional):
@@ -128,8 +128,8 @@ Same underlying flow as the install script, but you drive it yourself so you can
 1. Download the compose file and the env template into the same directory:
 
 ```bash
-curl -O https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/docker-compose.yml
-curl -O https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/.env.example
+curl -O https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/docker-compose.yml
+curl -O https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/.env.example
 cp .env.example .env
 ```
 
@@ -216,7 +216,7 @@ Published images are signed with cosign keyless signing (Sigstore). Verify befor
 
 ```bash
 cosign verify hypertern/hyper-tern:<version> \
-  --certificate-identity-regexp="^https://github.com/TheHyper-TERN/hyper-tern/" \
+  --certificate-identity-regexp="^https://github.com/buckleson/Hyper-TERN/" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
 ```
 
@@ -381,7 +381,7 @@ sets this automatically).
 | `HYPER_TERN_MODE`      | No       | auto (Docker → selfhosted) | `selfhosted` or `cloud`. `local` is a legacy alias. Self-hosted mode allows private/http URLs for custom providers. |
 | `HYPER_TERN_TELEMETRY_DISABLED` | No | `0`               | Set `1` to disable anonymous usage telemetry  |
 
-Full env var reference: [github.com/TheHyper-TERN/hyper-tern](https://github.com/TheHyper-TERN/hyper-tern)
+Full env var reference: [github.com/buckleson/Hyper-TERN](https://github.com/buckleson/Hyper-TERN)
 
 ## Anonymous usage telemetry
 
@@ -398,11 +398,11 @@ restart the container. The full field list is published at
 
 ## Links
 
-- [GitHub](https://github.com/TheHyper-TERN/hyper-tern)
+- [GitHub](https://github.com/buckleson/Hyper-TERN)
 - [Website](https://hyper-tern.build)
 - [Docs](https://hyper-tern.build/docs)
 - [Discord](https://discord.gg/FepAked3W7)
 
 ## License
 
-[MIT](https://github.com/TheHyper-TERN/hyper-tern/blob/main/LICENSE)
+[MIT](https://github.com/buckleson/Hyper-TERN/blob/main/LICENSE)

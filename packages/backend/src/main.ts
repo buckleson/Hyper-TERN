@@ -10,7 +10,6 @@ import { httpErrorLogger } from './common/middleware/http-error-logger.middlewar
 import {
   applyPrivateNetworkAllow,
   buildDevAllowedOrigins,
-  buildFrameSrc,
   createCorsOriginHandler,
 } from './cors-csp-config';
 import { shouldCompress } from './routing/proxy/compression-filter';
@@ -29,15 +28,6 @@ export async function bootstrap() {
   const hstsEnabled = /^https:\/\//i.test(betterAuthUrl);
   const isDev = process.env['NODE_ENV'] !== 'production';
 
-  // The Wingman drawer is a dev-only affordance — `frame-src` only loosens
-  // up when NODE_ENV !== 'production' to allow the hosted Wingman SPA
-  // (https://wingman.hyper-tern.build) and locally-running Wingman builds
-  // at `WINGMAN_PORT` (defaults to backend port + 1). Docker / cloud
-  // builds keep the strict 'self'-only frame policy.
-  const backendPort = Number(process.env['PORT']) || 3001;
-  const wingmanPort = Number(process.env['WINGMAN_PORT']) || backendPort + 1;
-  const frameSrc = buildFrameSrc({ isDev, wingmanPort });
-
   app.use(
     helmet({
       hsts: hstsEnabled,
@@ -50,13 +40,13 @@ export async function bootstrap() {
           connectSrc: ["'self'"],
           fontSrc: ["'self'"],
           objectSrc: ["'none'"],
-          frameSrc,
+          frameSrc: ["'self'"],
           frameAncestors: process.env['FRAME_ANCESTORS']
             ? process.env['FRAME_ANCESTORS']
                 .split(',')
                 .map((v) => v.trim())
                 .filter((v) => v !== '*')
-            : ["'none'"],
+            : ["'self'"],
           // Disable helmet's default `upgrade-insecure-requests`: it breaks
           // HTTP-only LAN deployments (10.x / 192.168.x / 172.16-31.x) where
           // browsers don't treat the origin as trustworthy and rewrite
@@ -73,24 +63,18 @@ export async function bootstrap() {
   // the package's default content-type filter.
   app.use(compression({ filter: shouldCompress }));
 
-  // CORS is enabled only in dev so the Vite frontend on :3000, the local
-  // Wingman build at `WINGMAN_PORT`, and the hosted Wingman SPA can hit
-  // the backend cross-origin. Production never enables CORS — the
-  // dashboard is same-origin and the Wingman drawer is dead-code-
-  // eliminated, so there are no legitimate cross-origin callers.
+  // CORS is enabled only in dev so the Vite frontend on :3000 can hit
+  // the backend cross-origin. Production never enables CORS because the
+  // dashboard is served same-origin.
   //
-  // `credentials: false` is deliberate — Wingman uses bearer keys, never
-  // cookies, and keeping credentials off the cross-origin path means a
-  // misconfigured allow-list can't leak session cookies. We omit
+  // `credentials: false` keeps session cookies off cross-origin requests.
+  // We omit
   // `allowedHeaders` on purpose so the cors middleware reflects the
-  // request's `Access-Control-Request-Headers`: Wingman replays real SDK
-  // fingerprints (e.g. the OpenAI/Stainless `X-Stainless-*` family), and a
-  // fixed allow-list silently fails those preflights.
+  // request's `Access-Control-Request-Headers`.
   if (isDev) {
     const configuredOrigin = process.env['CORS_ORIGIN'] || 'http://localhost:3000';
     const allowedOrigins = buildDevAllowedOrigins({
       configuredOrigin,
-      wingmanPort,
     });
     // PNA preflight must answer before the cors middleware ends the
     // OPTIONS response. Registering this `app.use` first puts it ahead

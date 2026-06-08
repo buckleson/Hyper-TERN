@@ -23,7 +23,7 @@ function buildApp() {
                 .split(',')
                 .map((v) => v.trim())
                 .filter((v) => v !== '*')
-            : ["'none'"],
+            : ["'self'"],
           upgradeInsecureRequests: null,
         },
       },
@@ -57,7 +57,7 @@ describe('CSP header', () => {
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("script-src 'self'");
     expect(csp).toContain("connect-src 'self'");
-    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("frame-ancestors 'self'");
     expect(csp).toContain("object-src 'none'");
   });
 });

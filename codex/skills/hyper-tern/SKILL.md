@@ -14,11 +14,11 @@ Hyper-Tern is a self-hosted AI model router and observability dashboard. This sk
 Prefer Docker. Confirm Docker is installed, then choose the platform-specific one-liner:
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh)
 ```
 
 ```powershell
-irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.ps1 | iex
+irm https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.ps1 | iex
 ```
 
 The installer creates `~/Hyper-Tern`, downloads `docker-compose.yml` and `.env`, generates `BETTER_AUTH_SECRET`, starts the stack, and waits for `http://localhost:2099/api/v1/health`.

@@ -7,7 +7,7 @@ import { agentPlatformIcon } from '../services/agent-platform-store.js';
 import { checkIsSelfHosted } from '../services/setup-status.js';
 import DuplicateAgentModal from './DuplicateAgentModal.jsx';
 
-const GITHUB_REPO = 'TheHyper-TERN/hyper-tern';
+const GITHUB_REPO = 'buckleson/Hyper-TERN';
 const STAR_DISMISSED_KEY = 'github-star-dismissed';
 const STAR_CACHE_KEY = 'github-star-count';
 const STAR_CACHE_TS_KEY = 'github-star-ts';

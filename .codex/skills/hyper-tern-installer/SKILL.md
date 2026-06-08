@@ -26,13 +26,13 @@ Use this skill to install Hyper-Tern on a user's machine through the official Do
 macOS / Linux:
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh)
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.ps1 | iex
+irm https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.ps1 | iex
 ```
 
 ## Review-First Commands
@@ -40,7 +40,7 @@ irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/insta
 macOS / Linux:
 
 ```bash
-curl -sSLO https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh
+curl -sSLO https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh
 bash install.sh --dry-run
 bash install.sh
 ```
@@ -48,7 +48,7 @@ bash install.sh
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.ps1 -OutFile install.ps1
 .\install.ps1 -DryRun
 .\install.ps1
 ```

@@ -156,7 +156,7 @@ describe("Header - GitHub star button", () => {
     });
     const link = container.querySelector(".header__github-star-btn") as HTMLAnchorElement;
     expect(link).toBeDefined();
-    expect(link.href).toContain("github.com/TheHyper-TERN/hyper-tern");
+    expect(link.href).toContain("github.com/buckleson/Hyper-TERN");
     expect(link.target).toBe("_blank");
     expect(link.rel).toBe("noopener noreferrer");
   });

@@ -125,7 +125,7 @@ const Sidebar: Component<SidebarProps> = (props) => {
       <div class="sidebar__spacer" />
 
       <a
-        href="https://github.com/TheHyper-TERN/hyper-tern/discussions/new?category=feature-request"
+        href="https://github.com/buckleson/Hyper-TERN/discussions/new?category=feature-request"
         target="_blank"
         rel="noopener noreferrer"
         class="sidebar__feedback"

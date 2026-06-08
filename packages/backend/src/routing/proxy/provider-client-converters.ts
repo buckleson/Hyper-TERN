@@ -120,7 +120,7 @@ const OPENAI_MAX_COMPLETION_TOKENS_RE = /^(o\d|gpt-5)/i;
  * Endpoints that ultimately hit OpenAI infrastructure and therefore need
  * `max_tokens` rewritten to `max_completion_tokens` for o-series / GPT-5+.
  * Copilot belongs here because GitHub Copilot proxies these models to OpenAI
- * (issue TheHyper-TERN/hyper-tern#1849).
+ * (issue buckleson/Hyper-TERN#1849).
  */
 const OPENAI_MAX_COMPLETION_TOKENS_ENDPOINTS = new Set(['openai', 'copilot']);
 

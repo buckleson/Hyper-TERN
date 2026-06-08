@@ -16,13 +16,13 @@
 #   bash install.sh --yes            # skip confirmation prompt (non-interactive)
 #
 # Review before running:
-#   curl -sSLO https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh
+#   curl -sSLO https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh
 #   less install.sh
 #   bash install.sh --dry-run
 #   bash install.sh
 #
 # If you trust the source, one-shot:
-#   bash <(curl -sSL https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh)
+#   bash <(curl -sSL https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh)
 
 set -euo pipefail
 
@@ -31,7 +31,7 @@ set -euo pipefail
 # or a local HTTP server hosting a pre-release copy (this is how the
 # Docker smoke CI exercises the script end-to-end against the branch
 # under test, not the published files on GitHub).
-REPO_RAW="${HYPER_TERN_INSTALLER_SOURCE:-https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker}"
+REPO_RAW="${HYPER_TERN_INSTALLER_SOURCE:-https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker}"
 # Default to $HOME/Hyper-Tern so running the one-liner from inside another
 # project (a git worktree, a dotfiles checkout, etc.) doesn't silently
 # litter that directory with `./Hyper-Tern/`.

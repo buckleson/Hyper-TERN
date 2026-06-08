@@ -1,65 +1,36 @@
 import {
-  HOSTED_WINGMAN_ORIGIN,
   applyPrivateNetworkAllow,
+  buildAllowedOrigins,
   buildDevAllowedOrigins,
-  buildFrameSrc,
   createCorsOriginHandler,
 } from './cors-csp-config';
 
-describe('HOSTED_WINGMAN_ORIGIN', () => {
-  it('points at the hosted Wingman SPA', () => {
-    expect(HOSTED_WINGMAN_ORIGIN).toBe('https://wingman.hyper-tern.build');
-  });
-});
-
 describe('buildDevAllowedOrigins', () => {
-  it('allows the Vite frontend, both loopback Wingman ports, and the hosted Wingman (deduped)', () => {
+  it('allows the configured frontend origin', () => {
     expect(
       buildDevAllowedOrigins({
         configuredOrigin: 'http://localhost:3000',
-        wingmanPort: 3002,
       }),
-    ).toEqual([
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://127.0.0.1:3002',
-      HOSTED_WINGMAN_ORIGIN,
-    ]);
-  });
-
-  it('respects a custom Wingman port and configured origin', () => {
-    const allowed = buildDevAllowedOrigins({
-      configuredOrigin: 'http://localhost:38240',
-      wingmanPort: 38239,
-    });
-    expect(allowed).toContain('http://localhost:38240');
-    expect(allowed).toContain('http://localhost:38239');
-    expect(allowed).toContain('http://127.0.0.1:38239');
-    expect(allowed).toContain(HOSTED_WINGMAN_ORIGIN);
+    ).toEqual(['http://localhost:3000']);
   });
 });
 
-describe('buildFrameSrc', () => {
-  it('in production, allows only self (drawer is dev-only)', () => {
-    expect(buildFrameSrc({ isDev: false, wingmanPort: 3002 })).toEqual(["'self'"]);
+describe('buildAllowedOrigins', () => {
+  it('deduplicates configured origins', () => {
+    expect(
+      buildAllowedOrigins({
+        configuredOrigin: 'http://localhost:3000',
+      }),
+    ).toEqual(['http://localhost:3000']);
   });
 
-  it('in dev, allows local Wingman ports and the hosted Wingman', () => {
-    expect(buildFrameSrc({ isDev: true, wingmanPort: 3002 })).toEqual([
-      "'self'",
-      'http://localhost:3002',
-      'http://127.0.0.1:3002',
-      HOSTED_WINGMAN_ORIGIN,
-    ]);
-  });
-
-  it('respects a custom Wingman port in dev', () => {
-    expect(buildFrameSrc({ isDev: true, wingmanPort: 38239 })).toContain('http://localhost:38239');
+  it('omits empty origins', () => {
+    expect(buildAllowedOrigins({})).toEqual([]);
   });
 });
 
 describe('createCorsOriginHandler', () => {
-  const handler = createCorsOriginHandler([HOSTED_WINGMAN_ORIGIN, 'http://localhost:3000']);
+  const handler = createCorsOriginHandler(['http://localhost:3000']);
 
   it('allows requests with no Origin header (same-origin / curl / server-to-server)', () => {
     const cb = jest.fn();
@@ -69,7 +40,7 @@ describe('createCorsOriginHandler', () => {
 
   it('allows a listed origin', () => {
     const cb = jest.fn();
-    handler(HOSTED_WINGMAN_ORIGIN, cb);
+    handler('http://localhost:3000', cb);
     expect(cb).toHaveBeenCalledWith(null, true);
   });
 
@@ -81,7 +52,7 @@ describe('createCorsOriginHandler', () => {
 });
 
 describe('applyPrivateNetworkAllow', () => {
-  const allowed = [HOSTED_WINGMAN_ORIGIN, 'http://localhost:3000'];
+  const allowed = ['http://localhost:3000'];
 
   it('echoes the PNA allow header for OPTIONS preflight from a listed origin', () => {
     const setHeader = jest.fn();
@@ -89,7 +60,7 @@ describe('applyPrivateNetworkAllow', () => {
       {
         method: 'OPTIONS',
         headers: {
-          origin: HOSTED_WINGMAN_ORIGIN,
+          origin: 'http://localhost:3000',
           'access-control-request-private-network': 'true',
         },
       },
@@ -105,7 +76,7 @@ describe('applyPrivateNetworkAllow', () => {
       {
         method: 'GET',
         headers: {
-          origin: HOSTED_WINGMAN_ORIGIN,
+          origin: 'http://localhost:3000',
           'access-control-request-private-network': 'true',
         },
       },
@@ -118,14 +89,14 @@ describe('applyPrivateNetworkAllow', () => {
   it('does not echo when the PNA request header is missing', () => {
     const setHeader = jest.fn();
     applyPrivateNetworkAllow(
-      { method: 'OPTIONS', headers: { origin: HOSTED_WINGMAN_ORIGIN } },
+      { method: 'OPTIONS', headers: { origin: 'http://localhost:3000' } },
       allowed,
       setHeader,
     );
     expect(setHeader).not.toHaveBeenCalled();
   });
 
-  it('does not echo for unlisted origins (no free pass for arbitrary callers)', () => {
+  it('does not echo for unlisted origins', () => {
     const setHeader = jest.fn();
     applyPrivateNetworkAllow(
       {
@@ -160,7 +131,7 @@ describe('applyPrivateNetworkAllow', () => {
       {
         method: 'OPTIONS',
         headers: {
-          origin: [HOSTED_WINGMAN_ORIGIN, HOSTED_WINGMAN_ORIGIN],
+          origin: ['http://localhost:3000', 'http://localhost:3000'],
           'access-control-request-private-network': 'true',
         },
       },

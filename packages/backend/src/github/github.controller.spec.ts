@@ -37,7 +37,7 @@ describe('GithubController', () => {
 
     expect(result).toEqual({ stars: 42 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/TheHyper-TERN/hyper-tern', {
+    expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/buckleson/Hyper-TERN', {
       headers: { Accept: 'application/vnd.github.v3+json' },
     });
   });

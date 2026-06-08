@@ -423,7 +423,7 @@ export class ProviderClient {
       // Force upstream streaming for copilot-responses so the SSE collector in
       // handleNonStreamResponse stays the single source of truth. Without this,
       // an explicit `stream: false` from the caller could hand us a plain JSON
-      // body that our SSE parser would silently drop (TheHyper-TERN/hyper-tern#1849).
+      // body that our SSE parser would silently drop (buckleson/Hyper-TERN#1849).
       if (endpointKey === 'copilot-responses') {
         requestBody.stream = true;
       }

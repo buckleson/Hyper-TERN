@@ -197,15 +197,6 @@
 - 6f52fdd: Normalize Chat Completions `image_url` parts to Responses API `input_image` parts before forwarding to `/v1/responses`.
 - bbcfa50: Stop filtering the canonical `gemini-3.1-flash-lite-preview` (and similar non-dated `flash-lite-preview` aliases) from Gemini model discovery. The previous regex was meant to drop deprecated dated snapshots like `gemini-2.5-flash-lite-preview-09-2025` but over-matched and removed live preview models too. Tightened to require a `-MM-YYYY` date suffix so dated snapshots still get filtered while canonical previews surface.
 - 91088e2: Fix "Add another key" button for OAuth subscription providers
-- cedeba2: Extract Wingman to a standalone hosted SPA at `wingman.hyper-tern.build`.
-  The dashboard's bottom drawer stays dev-only (dead-code-eliminated from
-  production / self-hosted bundles) and now embeds the hosted build by
-  default. Contributors can still point it at a local Wingman with
-  `VITE_WINGMAN_URL`. Dev-mode CORS allow-lists the hosted origin so
-  contributors can use the hosted SPA against a local backend; production
-  never enables CORS, so nothing Wingman-related ships to self-hosted
-  deployments. The `packages/wingman/` workspace is removed; source moves
-  to https://github.com/TheHyper-TERN/wingman.
 - abf3c15: Show a small "Last used" badge on the sign-in and sign-up pages so returning visitors can see at a glance which method (email or one of the social providers) they used last time. The hint is stored per-browser in `localStorage` and is best-effort: it falls back silently when storage is unavailable.
 - 9b4a586: Accept MiniMax Coding Plan `sk-cp-` tokens on the MiniMax subscription tile alongside the device-code OAuth flow. The region picker now applies to both paths, so CN Coding Plan tokens route to `api.minimaxi.com` for both model discovery and proxied requests. Closes #1467.
 - d9e6232: Improve the dashboard layout on phone-sized screens with a compact navigation drawer, tighter header chrome, and mobile-sized chart stats.
@@ -308,7 +299,6 @@
 - ab9f0cb: Add an Anthropic Messages-compatible endpoint at `POST /v1/messages`. Anthropic SDK clients (Claude Code, `@anthropic-ai/sdk`) can now point `ANTHROPIC_BASE_URL` at a Hyper-Tern gateway and route through Hyper-Tern's tier/specificity pipeline like any OpenAI client. The implementation translates Anthropic Messages requests into the internal chat-completions form (and back on the response side), reusing the existing routing, scoring, fallback, and recording machinery.
 - 1627493: Add a "Coding Assistant" category in the agent picker and move Claude Code into it. The Connect Agent / Change Agent Type modal now shows three columns instead of two: Personal AI Agent | App AI SDK | Coding Assistant. Claude Code is no longer mis-bucketed under personal agents — it sits in the new column with the existing copper-orange Claude mark. Picker order, icons, and the existing Claude Code setup wizard are unchanged.
 - fb7d921: Add support for multiple API keys per provider per agent. Users with several accounts for the same provider (a personal + work OpenAI key, two ChatGPT Plus subscriptions, two Anthropic Pro tokens) can attach all credentials and pin specific tiers or fallback rows to a specific labeled key. Multi-key applies to both `api_key` and `subscription` providers; local providers (Ollama, LM Studio) stay single-row since they don't carry credentials. Cap is 5 active keys per (agent, provider, auth_type). Single-key users see no UI change — the chip + "+ Add another key" affordance only appear once a provider has 2+ active keys.
-- c6efb87: Add Wingman, an in-dashboard gateway tester for contributors. Embedded as a half-screen iframe drawer behind a floating action button in dev mode, stripped from Docker / cloud bundles. Lets contributors send one-shot requests at the gateway while impersonating OpenClaw, Hermes, OpenAI SDK, Vercel AI SDK, LangChain, cURL, or Raw — with editable code panels that actually execute via stubbed SDKs.
 
 ### Patch Changes
 

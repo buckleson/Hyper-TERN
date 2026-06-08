@@ -1020,7 +1020,7 @@ describe('ProviderClient', () => {
     });
   });
 
-  describe('resolveEndpoint - Copilot Responses-only routing (TheHyper-TERN/hyper-tern#1849)', () => {
+  describe('resolveEndpoint - Copilot Responses-only routing (buckleson/Hyper-TERN#1849)', () => {
     // GitHub Copilot serves Codex variants only at /responses; /chat/completions
     // returns "Unsupported API for model". Mirrors the OpenAI Responses-only swap.
     const copilotResponsesOnlyModels = [
@@ -1234,7 +1234,7 @@ describe('ProviderClient', () => {
 
       const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body);
       // Forced upstream so handleNonStreamResponse's SSE collector remains
-      // the single source of truth — see TheHyper-TERN/hyper-tern#1849.
+      // the single source of truth — see buckleson/Hyper-TERN#1849.
       expect(sentBody.stream).toBe(true);
     });
 

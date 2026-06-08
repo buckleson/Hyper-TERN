@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing to Hyper-Tern! This guide will help you get up and running.
 
-[![codecov](https://img.shields.io/codecov/c/github/TheHyper-TERN/hyper-tern?color=brightgreen)](https://codecov.io/gh/TheHyper-TERN/hyper-tern)
+[![codecov](https://img.shields.io/codecov/c/github/buckleson/Hyper-TERN?color=brightgreen)](https://codecov.io/gh/buckleson/Hyper-TERN)
 
 ## Tech Stack
 
@@ -31,14 +31,6 @@ packages/
 ├── backend/              # NestJS API server (TypeORM, PostgreSQL, Better Auth)
 └── frontend/             # SolidJS single-page app (Vite, uPlot)
 ```
-
-> The Wingman gateway tester now lives in its own repository at
-> [`TheHyper-TERN/wingman`](https://github.com/TheHyper-TERN/wingman) and is hosted at
-> [`wingman.hyper-tern.build`](https://wingman.hyper-tern.build). The dashboard
-> embeds it as an iframe drawer **in dev mode only** — it is dead-code-
-> eliminated from production / self-hosted bundles. To run Wingman
-> locally instead of the hosted SPA, clone that repo and set
-> `VITE_WINGMAN_URL=http://localhost:3002` when building the frontend.
 
 Self-hosting is supported via the [Docker image](https://hub.docker.com/r/hypertern/hyper-tern).
 
@@ -108,7 +100,7 @@ cd packages/backend && NODE_OPTIONS='-r dotenv/config' npx nest start --watch
 npm run dev
 ```
 
-The frontend runs on `http://localhost:3000` and proxies API requests to the backend on `http://localhost:3001`. The Wingman drawer in the bottom-right (FAB or `⌘/Ctrl+Shift+W`) embeds the hosted SPA at `https://wingman.hyper-tern.build` — no local setup required. It only renders in dev mode and is stripped from production bundles.
+The frontend runs on `http://localhost:3000` and proxies API requests to the backend on `http://localhost:3001`.
 
 `npm run dev` is filtered to exactly `hyper-tern-frontend` — adding a new workspace with a `dev` script will not silently join the dev set.
 
@@ -147,14 +139,6 @@ The backend runs standalone and OpenClaw talks to it as a regular OpenAI-compati
 - Testing routing, tier assignment, or model resolution
 - Debugging the proxy or message recording
 - Working on the dashboard UI with live data
-
-## Wingman — gateway tester (dev only)
-
-**Wingman** is an in-browser playground for sending one-shot requests at the gateway while impersonating any of the agents/SDKs Hyper-Tern tracks (OpenClaw, Hermes, OpenAI SDK, Vercel AI SDK, LangChain, cURL, Raw). It lives in its own repo at [`TheHyper-TERN/wingman`](https://github.com/TheHyper-TERN/wingman) and is hosted at [`wingman.hyper-tern.build`](https://wingman.hyper-tern.build). The dashboard embeds it as an iframe drawer (FAB at bottom-right, or `⌘/Ctrl + Shift + W`) **only in dev mode** — it is dead-code-eliminated from production / self-hosted bundles via the `__DEV_MODE__` build constant in `packages/frontend/vite.config.ts`.
-
-Pick a profile, type a message, see the request and response side by side with the assistant's text, status pill, latency, tokens, and full headers/body dumps. Each send is saved to a localStorage history sidebar so you can compare runs and replay any of them.
-
-The hosted SPA is a static bundle with no first-party backend. Your API key is sent directly from the browser to whatever Hyper-Tern backend you configure as the base URL (the same endpoint the key is already used against); nothing is proxied through wingman.hyper-tern.build. To point the drawer at a locally-running Wingman build instead, set `VITE_WINGMAN_URL=http://localhost:3002` when building the frontend, and run Wingman from the `TheHyper-TERN/wingman` repo.
 
 ## Available Scripts
 
@@ -256,7 +240,7 @@ Write clear, concise commit messages that explain **why** the change was made. U
 
 ## Reporting Issues
 
-Found a bug or have a feature request? [Open an issue](https://github.com/TheHyper-TERN/hyper-tern/issues) with as much detail as possible.
+Found a bug or have a feature request? [Open an issue](https://github.com/buckleson/Hyper-TERN/issues) with as much detail as possible.
 
 ## Code of Conduct
 

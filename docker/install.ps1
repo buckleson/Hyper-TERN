@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 if (-not $Source) {
-  $Source = "https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker"
+  $Source = "https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker"
 }
 
 function Log($Message) { Write-Host "==> $Message" -ForegroundColor Cyan }

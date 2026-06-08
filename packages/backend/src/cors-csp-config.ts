@@ -1,45 +1,31 @@
-// Single source of truth for the dev-mode CORS allow-list and the CSP
-// `frame-src` directive. The Wingman drawer is a dev-only affordance —
-// the component is dead-code-eliminated from production bundles, so
-// neither directive needs Wingman in production.
-
-export const HOSTED_WINGMAN_ORIGIN = 'https://wingman.hyper-tern.build';
+// Single source of truth for the dev-mode CORS allow-list.
 
 export interface DevOriginBuilderOptions {
   configuredOrigin: string;
-  wingmanPort: number;
 }
 
-export interface FrameSrcOptions {
-  isDev: boolean;
-  wingmanPort: number;
+export interface AllowedOriginBuilderOptions {
+  configuredOrigin?: string;
 }
 
 export function buildDevAllowedOrigins({
   configuredOrigin,
-  wingmanPort,
 }: DevOriginBuilderOptions): string[] {
-  return Array.from(
-    new Set([
-      configuredOrigin,
-      `http://localhost:${wingmanPort}`,
-      `http://127.0.0.1:${wingmanPort}`,
-      'http://localhost:3002',
-      HOSTED_WINGMAN_ORIGIN,
-    ]),
-  );
+  return buildAllowedOrigins({
+    configuredOrigin,
+  });
 }
 
-export function buildFrameSrc({ isDev, wingmanPort }: FrameSrcOptions): string[] {
-  if (!isDev) {
-    return ["'self'"];
-  }
-  return [
-    "'self'",
-    `http://localhost:${wingmanPort}`,
-    `http://127.0.0.1:${wingmanPort}`,
-    HOSTED_WINGMAN_ORIGIN,
-  ];
+export function buildAllowedOrigins({
+  configuredOrigin,
+}: AllowedOriginBuilderOptions): string[] {
+  const origins = [configuredOrigin].filter(
+    (origin): origin is string => typeof origin === 'string' && origin.length > 0,
+  );
+
+  return Array.from(
+    new Set(origins),
+  );
 }
 
 export type CorsOriginCallback = (err: Error | null, allow?: boolean) => void;
@@ -55,9 +41,8 @@ export function createCorsOriginHandler(allowedOrigins: string[]): CorsOriginHan
   };
 }
 
-// Chrome's Private Network Access blocks public HTTPS origins (e.g. the
-// hosted Wingman SPA at https://wingman.hyper-tern.build) from reaching
-// loopback addresses unless the server echoes back
+// Chrome's Private Network Access can block browser calls to loopback
+// addresses unless the server echoes back
 // `Access-Control-Allow-Private-Network: true` on the preflight. Only
 // echo for origins that already passed the CORS allow-list so this
 // header isn't a free pass for arbitrary callers.

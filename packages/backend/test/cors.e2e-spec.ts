@@ -4,7 +4,6 @@ import type { INestApplication } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 import {
-  HOSTED_WINGMAN_ORIGIN,
   applyPrivateNetworkAllow,
   buildDevAllowedOrigins,
   createCorsOriginHandler,
@@ -37,7 +36,6 @@ async function buildDevApp(): Promise<INestApplication> {
   const app = moduleRef.createNestApplication();
   const allowedOrigins = buildDevAllowedOrigins({
     configuredOrigin: 'http://localhost:3000',
-    wingmanPort: 3002,
   });
   app.use((req: Request, res: Response, next: NextFunction) => {
     applyPrivateNetworkAllow(req, allowedOrigins, (name, value) => res.setHeader(name, value));
@@ -71,30 +69,10 @@ describe('CORS — development', () => {
     expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3000');
   });
 
-  it('allows the local Wingman dev server', async () => {
-    const res = await request(app.getHttpServer())
-      .options('/v1/chat/completions')
-      .set('Origin', 'http://localhost:3002')
-      .set('Access-Control-Request-Method', 'POST');
-    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3002');
-  });
-
-  it('allows preflight from the hosted Wingman origin', async () => {
-    const res = await request(app.getHttpServer())
-      .options('/v1/chat/completions')
-      .set('Origin', HOSTED_WINGMAN_ORIGIN)
-      .set('Access-Control-Request-Method', 'POST')
-      .set('Access-Control-Request-Headers', 'authorization,content-type');
-    expect(res.headers['access-control-allow-origin']).toBe(HOSTED_WINGMAN_ORIGIN);
-    const allowHeaders = (res.headers['access-control-allow-headers'] ?? '').toLowerCase();
-    expect(allowHeaders).toContain('authorization');
-    expect(allowHeaders).toContain('content-type');
-  });
-
   it('does not echo Access-Control-Allow-Credentials (no cookies cross-origin)', async () => {
     const res = await request(app.getHttpServer())
       .options('/v1/chat/completions')
-      .set('Origin', HOSTED_WINGMAN_ORIGIN)
+      .set('Origin', 'http://localhost:3000')
       .set('Access-Control-Request-Method', 'POST');
     expect(res.headers['access-control-allow-credentials']).toBeUndefined();
   });
@@ -110,7 +88,7 @@ describe('CORS — development', () => {
   it('echoes Access-Control-Allow-Private-Network for PNA preflight from a listed origin', async () => {
     const res = await request(app.getHttpServer())
       .options('/api/v1/health')
-      .set('Origin', HOSTED_WINGMAN_ORIGIN)
+      .set('Origin', 'http://localhost:3000')
       .set('Access-Control-Request-Method', 'GET')
       .set('Access-Control-Request-Private-Network', 'true');
     expect(res.headers['access-control-allow-private-network']).toBe('true');
@@ -119,7 +97,7 @@ describe('CORS — development', () => {
   it('does not echo Allow-Private-Network when the request header is missing', async () => {
     const res = await request(app.getHttpServer())
       .options('/api/v1/health')
-      .set('Origin', HOSTED_WINGMAN_ORIGIN)
+      .set('Origin', 'http://localhost:3000')
       .set('Access-Control-Request-Method', 'GET');
     expect(res.headers['access-control-allow-private-network']).toBeUndefined();
   });

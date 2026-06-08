@@ -4,7 +4,7 @@
  * stream stalls or dies before producing any data, we can still fall back
  * to another provider instead of sending the client a truncated response.
  *
- * @see https://github.com/TheHyper-TERN/hyper-tern/issues/1656
+ * @see https://github.com/buckleson/Hyper-TERN/issues/1656
  */
 
 const DEFAULT_WARMUP_MS = 15_000;

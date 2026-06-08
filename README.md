@@ -27,13 +27,13 @@ Hyper-Tern is an open-source model router for AI agents. It gives your agent one
 macOS / Linux:
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh)
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.ps1 | iex
+irm https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.ps1 | iex
 ```
 
 The installer downloads the Docker Compose file, creates a local `.env`, generates `BETTER_AUTH_SECRET`, starts PostgreSQL and Hyper-Tern, then waits for `http://localhost:2099/api/v1/health`.
@@ -41,7 +41,7 @@ The installer downloads the Docker Compose file, creates a local `.env`, generat
 Prefer to inspect before running:
 
 ```bash
-curl -sSLO https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/install.sh
+curl -sSLO https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/install.sh
 bash install.sh --dry-run
 bash install.sh
 ```
@@ -67,8 +67,8 @@ docker pull hypertern/hyper-tern:latest
 Manual Compose install:
 
 ```bash
-curl -O https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/docker-compose.yml
-curl -O https://raw.githubusercontent.com/TheHyper-TERN/hyper-tern/main/docker/.env.example
+curl -O https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/docker-compose.yml
+curl -O https://raw.githubusercontent.com/buckleson/Hyper-TERN/main/docker/.env.example
 cp .env.example .env
 openssl rand -hex 32
 docker compose up -d

@@ -4,24 +4,24 @@
     "hash": "e5ba24e38ff909628a9a63f8a9efcaf6"
   },
   "G:\\TheHyper-TERN\\manifest\\docker\\install.ps1": {
-    "mtime": 1780846262.5818384,
-    "hash": "6b4afb24a9d20cb93d2f3a11f65d6ac2"
+    "mtime": 1780892178.7979453,
+    "hash": "966eeb7a7c09fb33b071f23f36fdb2e1"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\app.module.ts": {
     "mtime": 1780851545.1982439,
     "hash": "2fb646b08d9c0a93e322effff40c98b2"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\cors-csp-config.spec.ts": {
-    "mtime": 1780845788.654595,
-    "hash": "4fcd276b9c57666a7d48ae4b930349f1"
+    "mtime": 1780891579.434727,
+    "hash": "b19caa92400205aa75ab9beaddc09a4e"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\cors-csp-config.ts": {
-    "mtime": 1780845788.654595,
-    "hash": "128c262416ef71355d2d5774537c404c"
+    "mtime": 1780891571.7288692,
+    "hash": "a862fb1376f97bc24a9e2bf566adb122"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\main.ts": {
-    "mtime": 1780845788.65824,
-    "hash": "62c3eab9708f303293c0155268feaf08"
+    "mtime": 1780891292.8423767,
+    "hash": "9380190fad61f3db8739106f2d65077c"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\analytics\\analytics.module.ts": {
     "mtime": 1780851545.1982439,
@@ -1272,12 +1272,12 @@
     "hash": "b903306ef99047f500353dbed5615ba4"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\github\\github.controller.spec.ts": {
-    "mtime": 1780845789.102717,
-    "hash": "8bcf411f6bd82288d163681fcdf75e38"
+    "mtime": 1780892178.9154923,
+    "hash": "8edbdff392f5fab195f46b15c76d3364"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\github\\github.controller.ts": {
-    "mtime": 1780845789.1117995,
-    "hash": "38696927eca75f6367695a3b27ccfbb8"
+    "mtime": 1780892178.9154923,
+    "hash": "ee5d21bfe49bd4990248f99380932c48"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\github\\github.module.ts": {
     "mtime": 1780737367.048097,
@@ -2220,12 +2220,12 @@
     "hash": "b831dc95428a8ba9d1a5a2eea47767a4"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\provider-client-converters.ts": {
-    "mtime": 1780845789.6533432,
-    "hash": "487c1a7e39bbb5b2a01ca5dd06c52ba1"
+    "mtime": 1780892178.9261024,
+    "hash": "f4a8097f9181aec13c974ebfbc471709"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\provider-client.ts": {
-    "mtime": 1780845789.6533432,
-    "hash": "5456752eb8b798f78494ae02e31cbdd9"
+    "mtime": 1780892178.922925,
+    "hash": "5b5366a15df8ad68d4fc6ebb525a62c5"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\provider-endpoints.ts": {
     "mtime": 1780845789.6615164,
@@ -2328,8 +2328,8 @@
     "hash": "7e903013f5ba67ee749863ca3e62b5f5"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\stream-warmup.ts": {
-    "mtime": 1780845789.7573385,
-    "hash": "ec8c812ec183569077bee201672e9230"
+    "mtime": 1780892178.9298217,
+    "hash": "17343412bd1d5bf2c9659d8eab97e605"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\stream-writer.ts": {
     "mtime": 1780845789.7640083,
@@ -2396,16 +2396,16 @@
     "hash": "47c5136a015d20bf3ba8a417f67f78ea"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\__tests__\\provider-client-converters.spec.ts": {
-    "mtime": 1780845789.8547142,
-    "hash": "6e80c9736ec96780ab06b79992c2437b"
+    "mtime": 1780892178.9357042,
+    "hash": "de25922723841bd26644db244120b12f"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\__tests__\\provider-client.headers.spec.ts": {
     "mtime": 1780845789.8587434,
     "hash": "5849e51c1f8cf24e684b378e4ed1f8ac"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\__tests__\\provider-client.spec.ts": {
-    "mtime": 1780845789.8800888,
-    "hash": "b4ae73db48f4bdebd96fe0c515ac054b"
+    "mtime": 1780892178.971323,
+    "hash": "1bfa5918926a435deb9b1d3e2ac31ba9"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\src\\routing\\proxy\\__tests__\\provider-client.ssrf.spec.ts": {
     "mtime": 1780737367.1224835,
@@ -2920,16 +2920,16 @@
     "hash": "ee1da52b480ad00327da189b76a27c84"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\test\\cors.e2e-spec.ts": {
-    "mtime": 1780737367.184148,
-    "hash": "2dc45209229eb32c3ff398e0f79465cc"
+    "mtime": 1780891338.873196,
+    "hash": "5543dd49e80da95c3a24d0d4ca2ef86a"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\test\\costs.e2e-spec.ts": {
     "mtime": 1780851545.1926057,
     "hash": "a4062f841ca962db33e5f9bbee72ef3c"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\test\\csp.e2e-spec.ts": {
-    "mtime": 1780737367.184148,
-    "hash": "0916fbd4af74db28696307832db503d9"
+    "mtime": 1780889364.494484,
+    "hash": "e7091b8d226a28dc0aea84851c29fe9e"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\backend\\test\\custom-providers.e2e-spec.ts": {
     "mtime": 1780737367.184148,
@@ -3004,24 +3004,24 @@
     "hash": "000c877ad73ca75f109ec7e717947e68"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\vite.config.ts": {
-    "mtime": 1780845790.3663578,
-    "hash": "bb490375fba7faea66e2cbd50a16cae7"
+    "mtime": 1780891206.3995254,
+    "hash": "24d04862663ad2dfbe7cd44655f7ceea"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\public\\theme-init.js": {
     "mtime": 1780737367.231004,
     "hash": "70fa3585a353d043e8d52e697c4edbe6"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\App.tsx": {
-    "mtime": 1780737367.231004,
-    "hash": "fedc5b0ae25b2323c760c384adccea78"
+    "mtime": 1780891189.515404,
+    "hash": "1b21389baa3a69b735079e6e4b434cfe"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\index.tsx": {
-    "mtime": 1780851007.3286762,
-    "hash": "3ebfb52fdfd4b49f853c7aec5ed96c0f"
+    "mtime": 1780891432.4606638,
+    "hash": "520b836b699af6802ede6cc1e190ef72"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\vite-env.d.ts": {
-    "mtime": 1780845790.3762617,
-    "hash": "f3ee0120047d0e60bd0afe20fe79e95c"
+    "mtime": 1780891206.498264,
+    "hash": "fb67fd568208fcc047e337b890b44368"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\AgentGuard.tsx": {
     "mtime": 1780737367.231004,
@@ -3136,8 +3136,8 @@
     "hash": "2dd28caa1c0f443837c02f0cef0a4cbf"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\Header.tsx": {
-    "mtime": 1780845790.4229674,
-    "hash": "79e1dfa5205dac01f0178ace36dc1acb"
+    "mtime": 1780892178.9062014,
+    "hash": "957a5e251e945d419ab64ffe30217a57"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\HeaderComboBox.tsx": {
     "mtime": 1780737367.231004,
@@ -3292,8 +3292,8 @@
     "hash": "715b27e44e9257a0db5d2589bd7385cc"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\ProviderSubscriptionTab.tsx": {
-    "mtime": 1780845790.5311933,
-    "hash": "164e4d8a5d5cf028198c8ed90b6f73dc"
+    "mtime": 1780892178.9081583,
+    "hash": "c74ffa9893958101f9bc0beac6d34bb5"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\recorded-drawer-state.ts": {
     "mtime": 1780737367.2627285,
@@ -3384,8 +3384,8 @@
     "hash": "bd5ba67d5f4a8526721f6330c43bd5a5"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\Sidebar.tsx": {
-    "mtime": 1780851007.4595563,
-    "hash": "83663f23aca04d0b38d5a2384f781401"
+    "mtime": 1780892178.9149065,
+    "hash": "2540c484c7835baf22f42b3ff044620b"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\SocialButtons.tsx": {
     "mtime": 1780737367.2627285,
@@ -3402,10 +3402,6 @@
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\VersionIndicator.tsx": {
     "mtime": 1780845790.5848343,
     "hash": "d37f70232ac68639f47a392ab6d884ad"
-  },
-  "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\WingmanDevTools.tsx": {
-    "mtime": 1780845790.5848343,
-    "hash": "8c1b863e77845562c44fd46b2ae9abed"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\src\\components\\playground\\icons.tsx": {
     "mtime": 1780737367.2627285,
@@ -3824,8 +3820,8 @@
     "hash": "bc6377494a5250b18717777bf91712cf"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\Header.test.tsx": {
-    "mtime": 1780847997.7268362,
-    "hash": "b719cf2a5877c02a2a031f414f3c8fcd"
+    "mtime": 1780892178.9072113,
+    "hash": "bb6dd9522ffddc393ccc6f7240deda1b"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\HeaderComboBox.test.tsx": {
     "mtime": 1780845790.8727083,
@@ -4032,8 +4028,8 @@
     "hash": "325c4f897aef4b35cfc217232bcd013f"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\ProviderSubscriptionTab.test.tsx": {
-    "mtime": 1780845846.3495426,
-    "hash": "b24ed19901dfc93f660083602f3799a4"
+    "mtime": 1780892178.9108863,
+    "hash": "dff115085c7dba135258db7cd72e325a"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\RecordedDrawerChrome.test.tsx": {
     "mtime": 1780737367.3246796,
@@ -4130,10 +4126,6 @@
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\VersionIndicator.test.tsx": {
     "mtime": 1780845791.0861125,
     "hash": "cda31c893db6929b20e66eae366568d5"
-  },
-  "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\WingmanDevTools.test.tsx": {
-    "mtime": 1780845791.0901325,
-    "hash": "d101432586a54cbcb5bdf372909193fb"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\frontend\\tests\\components\\playground\\PlaygroundPrompt.test.tsx": {
     "mtime": 1780737367.3246796,
@@ -4572,12 +4564,12 @@
     "hash": "9a14c6fb70ceb5ffd3d7a43a784f6bd2"
   },
   "G:\\TheHyper-TERN\\manifest\\AGENTS.md": {
-    "mtime": 1780849295.4266758,
-    "hash": "aff49506c92aad3853a0305b218f1eb1"
+    "mtime": 1780891448.5359254,
+    "hash": "33b62e1f84a24bf049b390a674bcc713"
   },
   "G:\\TheHyper-TERN\\manifest\\CLAUDE.md": {
-    "mtime": 1780849295.4251552,
-    "hash": "38d73a517a93d0541c5432efef401b37"
+    "mtime": 1780891448.5437157,
+    "hash": "80b422d7e766de48805b993b2a4f0eaa"
   },
   "G:\\TheHyper-TERN\\manifest\\codecov.yml": {
     "mtime": 1780737366.9422376,
@@ -4588,20 +4580,20 @@
     "hash": "d046e626e2c13e3d1982da0c4857b57e"
   },
   "G:\\TheHyper-TERN\\manifest\\CONTRIBUTING.md": {
-    "mtime": 1780849295.4286857,
-    "hash": "dfc408dcacd06104c5658df574352f7b"
+    "mtime": 1780892285.9879827,
+    "hash": "f0f3d093cc91bcbd17b7178dda99839f"
   },
   "G:\\TheHyper-TERN\\manifest\\README.md": {
-    "mtime": 1780872227.3202925,
-    "hash": "0c60cc918871fa72315737c21a67ad10"
+    "mtime": 1780892178.7955272,
+    "hash": "e19dd3e9fa0c6cd37151ba33dfbc4ca9"
   },
   "G:\\TheHyper-TERN\\manifest\\SECURITY.md": {
-    "mtime": 1780845788.4354758,
-    "hash": "8e329770ff7ac2dd939afa1aafec35ff"
+    "mtime": 1780892286.1037521,
+    "hash": "ccbde498836b9bba185d0bc8991d8319"
   },
   "G:\\TheHyper-TERN\\manifest\\codex\\skills\\hyper-tern\\SKILL.md": {
-    "mtime": 1780846307.874389,
-    "hash": "28ae80cba595a5515a655004d680d07b"
+    "mtime": 1780892285.8716817,
+    "hash": "ae1418a188022f70132d537e16df6b64"
   },
   "G:\\TheHyper-TERN\\manifest\\codex\\skills\\hyper-tern\\agents\\openai.yaml": {
     "mtime": 1780846308.0811515,
@@ -4612,12 +4604,12 @@
     "hash": "789773fc56baf3ae89b1c3f8ff2cc016"
   },
   "G:\\TheHyper-TERN\\manifest\\docker\\docker-compose.yml": {
-    "mtime": 1780850706.7594333,
-    "hash": "0cb8e76d2acd56a44cffab89e0751500"
+    "mtime": 1780891206.724183,
+    "hash": "5cd26c11dc3bd9c42d7431e3b2df0c24"
   },
   "G:\\TheHyper-TERN\\manifest\\docker\\DOCKER_README.md": {
-    "mtime": 1780872568.8749032,
-    "hash": "9f9aacc7d8df69232cc29e3947b72f10"
+    "mtime": 1780892178.803628,
+    "hash": "b5b84f896434f1e22741584daaf89ad7"
   },
   "G:\\TheHyper-TERN\\manifest\\docs\\model-parameters-schema.md": {
     "mtime": 1780826490.9788375,
@@ -4632,8 +4624,8 @@
     "hash": "fa61690968fbfbe99a6bd975bc775425"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\hyper-tern\\CHANGELOG.md": {
-    "mtime": 1780849295.4523966,
-    "hash": "da436619252d9a90b3455ce18f5b13fb"
+    "mtime": 1780891448.557923,
+    "hash": "70d1924e52a57418a6a1f50870b54ee3"
   },
   "G:\\TheHyper-TERN\\manifest\\packages\\hyper-tern\\README.md": {
     "mtime": 1780845791.276306,

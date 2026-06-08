@@ -97,7 +97,7 @@ const ProviderSubscriptionTab: Component<Props> = (props) => {
         <div class="provider-modal__add-custom">
           <a
             class="provider-modal__add-custom-chip"
-            href="https://github.com/TheHyper-TERN/hyper-tern/discussions/973"
+            href="https://github.com/buckleson/Hyper-TERN/discussions/973"
             target="_blank"
             rel="noopener noreferrer"
           >
